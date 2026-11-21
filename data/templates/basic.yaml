@@ -1,0 +1,23 @@
+# §1 Простейшие: внесение под дифференциал
+- id: int_diff_under_01
+  topic: indef_integral.basic
+  source: "Демидович, № 1674–1679, 1684–1686 (аналог)"
+  difficulty: A
+  var: x
+  params:
+    a: {int: [1, 9]}
+    b: {int: [1, 5]}
+    s: {choice: [1, -1]}
+    k: {choice: [2, 3]}
+  integrand: "x/(a + s*b*x**2)**k"
+  checkpoints:
+    - type: choice
+      prompt: "Что внести под дифференциал?"
+      options: ["x dx = ½ d(x²)", "x dx = d(x²)", "dx = d(x²)", "разложить на простые дроби"]
+      correct: ["x dx = ½ d(x²)"]
+      hint: "Числитель x — с точностью до множителя производная x², а x² стоит в знаменателе."
+    - type: antiderivative
+      prompt: "Ответ (с +C)"
+      reference: "(a + s*b*x**2)**(1 - k)/(2*s*b*(1 - k))"
+      domain: ["-0.9*sqrt(a/b)", "0.9*sqrt(a/b)"]   # при s = -1 полюса в ±sqrt(a/b)
+  blitz_method: "внесение под дифференциал"

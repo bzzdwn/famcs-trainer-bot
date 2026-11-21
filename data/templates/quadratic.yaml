@@ -1,0 +1,48 @@
+# §1 Квадратный трёхчлен: выделение полного квадрата
+- id: int_quad_denominator_01
+  topic: indef_integral.quadratic
+  source: "Демидович, № 1836–1841 (аналог)"
+  difficulty: A
+  var: x
+  params:
+    m: {int: [1, 4]}
+    n: {int: [-5, 5]}
+    p: {int: [-3, 3], exclude: [0]}
+    q: {int: [1, 3]}
+  constraints: ["n != m*p"]
+  integrand: "(m*x + n)/(x**2 + 2*p*x + p**2 + q**2)"
+  checkpoints:
+    - type: expr
+      prompt: "Выдели полный квадрат в знаменателе"
+      expected: "(x + p)**2 + q**2"
+      same_as: "x**2 + 2*p*x + p**2 + q**2"
+      distractors: ["(x - p)**2 + q**2", "(x + p)**2 - q**2", "(x + 2*p)**2 + q**2"]
+      hint: "x² + 2px + … = (x + p)² + (остаток): половина коэффициента при x — это p."
+    - type: antiderivative
+      prompt: "Ответ (с +C)"
+      reference: "m*log(x**2 + 2*p*x + p**2 + q**2)/2 + (n - m*p)*atan((x + p)/q)/q"
+  blitz_method: "выделение полного квадрата"
+
+- id: int_quad_sqrt_01
+  topic: indef_integral.quadratic
+  source: "Демидович, № 1846–1852 (аналог)"
+  difficulty: B
+  var: x
+  params:
+    m: {int: [1, 4]}
+    n: {int: [-5, 5]}
+    p: {int: [-3, 3], exclude: [0]}
+    q: {int: [1, 3]}
+  constraints: ["n != m*p"]
+  integrand: "(m*x + n)/sqrt(x**2 + 2*p*x + p**2 + q**2)"
+  checkpoints:
+    - type: expr
+      prompt: "Выдели полный квадрат под корнем"
+      expected: "(x + p)**2 + q**2"
+      same_as: "x**2 + 2*p*x + p**2 + q**2"
+      distractors: ["(x - p)**2 + q**2", "(x + p)**2 - q**2", "(x + 2*p)**2 + q**2"]
+      hint: "x² + 2px + … = (x + p)² + (остаток): половина коэффициента при x — это p."
+    - type: antiderivative
+      prompt: "Ответ (с +C)"
+      reference: "m*sqrt(x**2 + 2*p*x + p**2 + q**2) + (n - m*p)*log(x + p + sqrt(x**2 + 2*p*x + p**2 + q**2))"
+  blitz_method: "выделение полного квадрата"

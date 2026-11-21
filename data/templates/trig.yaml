@@ -1,0 +1,121 @@
+# §4 Тригонометрические
+- id: int_trig_odd_sin_01
+  topic: indef_integral.trig
+  source: "Демидович, № 1747–1748, 1991, 1994–1996 (аналог)"
+  difficulty: A
+  var: x
+  params:
+    a: {int: [1, 3]}
+    n: {choice: [0, 2, 4]}
+  integrand: "sin(a*x)**3*cos(a*x)**n"
+  checkpoints:
+    - type: choice
+      prompt: "Какую замену применишь?"
+      options: ["t = cos(ax)", "t = sin(ax)", "t = tg(ax)", "t = tg(ax/2)"]
+      correct: ["t = cos(ax)"]
+      hint: "sin в нечётной степени: sin³ = sin²·sin, sin² = 1 − cos², а sin(ax) dx = −d(cos ax)/a."
+    - type: transformed_integrand
+      prompt: "Запиши подынтегральную функцию после замены (по t)"
+      var: t
+      substitution: "cos(a*x)"
+      expected: "-(1 - t**2)*t**n/a"
+      distractors: ["-(1 + t**2)*t**n/a", "-(1 - t**2)*t**n"]
+      skippable: true
+      hint: "dt = −a·sin(ax) dx"
+    - type: antiderivative
+      prompt: "Ответ (с +C)"
+      reference: "(-cos(a*x)**(n + 1)/(n + 1) + cos(a*x)**(n + 3)/(n + 3))/a"
+  blitz_method: "замена t = cos x (sin в нечётной степени)"
+  method_alternatives: ["универсальная замена"]
+
+- id: int_trig_universal_01
+  topic: indef_integral.trig
+  source: "Демидович, № 2025, 2028 (аналог)"
+  difficulty: B
+  var: x
+  params:
+    a: {int: [2, 7]}
+    b: {int: [1, 6]}
+  constraints: ["a > b"]
+  integrand: "1/(a + b*cos(x))"
+  checkpoints:
+    - type: choice
+      prompt: "Какую замену применишь?"
+      options: ["t = cos x", "t = sin x", "t = tg x", "t = tg(x/2)"]
+      correct: ["t = tg(x/2)"]
+      hint: "Функция не нечётна ни по sin, ни по cos и не чётна по паре."
+    - type: transformed_integrand
+      prompt: "Запиши подынтегральную функцию после замены (по t)"
+      var: t
+      substitution: "tan(x/2)"
+      expected: "2/((a + b) + (a - b)*t**2)"
+      distractors:
+        - "1/((a + b) + (a - b)*t**2)"                 # потерян 2 из dx = 2dt/(1+t²)
+        - "2/((a - b) + (a + b)*t**2)"                 # перевёрнута формула cos x
+        - "2/(((a + b) + (a - b)*t**2)*(1 + t**2))"    # потерян (1+t²) при приведении к общему знаменателю
+      skippable: true
+      hint: "cos x = (1 − t²)/(1 + t²), dx = 2dt/(1 + t²)"
+    - type: antiderivative
+      prompt: "Ответ (с +C)"
+      reference: "2/sqrt(a**2 - b**2)*atan(sqrt((a - b)/(a + b))*tan(x/2))"
+      domain: [-3.0, 3.0]
+  blitz_method: "универсальная замена"
+
+- id: int_trig_product_01
+  topic: indef_integral.trig
+  source: "Демидович, № 1743–1746, 2013–2017 (аналог)"
+  difficulty: A
+  var: x
+  params:
+    a: {int: [1, 5]}
+    b: {int: [1, 5]}
+  constraints: ["a != b"]
+  integrand: "sin(a*x)*cos(b*x)"
+  checkpoints:
+    - type: expr
+      prompt: "Преобразуй произведение в сумму"
+      expected: "(sin((a + b)*x) + sin((a - b)*x))/2"
+      same_as: integrand
+      distractors:
+        - "(sin((a + b)*x) - sin((a - b)*x))/2"      # знак во второй скобке
+        - "(cos((a - b)*x) + cos((a + b)*x))/2"      # формула для cos·cos
+        - "sin((a + b)*x) + sin((a - b)*x)"          # потерян ½
+      hint: "sin α · cos β = ½[sin(α + β) + sin(α − β)]"
+    - type: antiderivative
+      prompt: "Ответ (с +C)"
+      reference: "-cos((a + b)*x)/(2*(a + b)) - cos((a - b)*x)/(2*(a - b))"
+  blitz_method: "произведение → сумма"
+
+- id: int_trig_tan_01
+  topic: indef_integral.trig
+  source: "Демидович, № 1702, 2029–2030 (аналог)"
+  difficulty: B
+  var: x
+  params:
+    a: {int: [1, 4]}
+    b: {int: [1, 4]}
+  constraints: ["a != b"]
+  integrand: "1/(a**2*sin(x)**2 + b**2*cos(x)**2)"
+  checkpoints:
+    - type: choice
+      prompt: "Какую замену применишь?"
+      options: ["t = tg x", "t = tg(x/2)", "t = sin x", "t = cos x"]
+      correct: ["t = tg x"]
+      hint: "Функция чётна по паре (sin, cos): R(−sin, −cos) = R(sin, cos) → t = tg x."
+    - type: transformed_integrand
+      prompt: "Запиши подынтегральную функцию после замены (по t)"
+      var: t
+      substitution: "tan(x)"
+      expected: "1/(a**2*t**2 + b**2)"
+      distractors:
+        - "1/((a**2*t**2 + b**2)*(1 + t**2))"   # не сократил (1 + t²) от dx
+        - "1/(b**2*t**2 + a**2)"                # перепутал sin² и cos²
+        - "1/(a*t**2 + b)"                      # потерял квадраты коэффициентов
+      skippable: true
+      hint: "sin²x = t²/(1 + t²), cos²x = 1/(1 + t²), dx = dt/(1 + t²)"
+    - type: antiderivative
+      prompt: "Ответ (с +C)"
+      reference: "atan(a*tan(x)/b)/(a*b)"
+      domain: [-1.4, 1.4]
+  blitz_method: "замена t = tg x"
+  method_alternatives: ["универсальная замена"]

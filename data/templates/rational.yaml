@@ -1,0 +1,54 @@
+# §2 Рациональные
+- id: int_rational_linear_01
+  topic: indef_integral.rational
+  source: "Демидович, № 1866–1874 (аналог)"
+  difficulty: A
+  var: x
+  params:
+    r1: {int: [-4, 4]}
+    r2: {int: [-4, 4]}
+    p: {int: [-5, 5], exclude: [0]}
+    q: {int: [-5, 5], exclude: [0]}
+  constraints: ["r1 < r2", "p != q"]
+  integrand: "cancel(p/(x - r1) + q/(x - r2))"
+  checkpoints:
+    - type: expr
+      prompt: "Разложи на простые дроби"
+      expected: "p/(x - r1) + q/(x - r2)"
+      same_as: integrand
+      distractors: ["q/(x - r1) + p/(x - r2)", "p/(x + r1) + q/(x + r2)", "p/(x - r1) - q/(x - r2)"]
+      hint: "Ищи в виде A/(x − x₁) + B/(x − x₂): домножь на знаменатель и подставь корни."
+    - type: antiderivative
+      prompt: "Ответ (с +C)"
+      reference: "p*log(Abs(x - r1)) + q*log(Abs(x - r2))"
+      domain: [-6.0, 6.0]
+  blitz_method: "разложение на простые дроби"
+
+- id: int_rational_quad_01
+  topic: indef_integral.rational
+  source: "Демидович, № 1877–1880 (аналог)"
+  difficulty: B
+  var: x
+  params:
+    r: {int: [-3, 3]}
+    q: {int: [1, 3]}
+    k: {int: [-4, 4], exclude: [0]}
+    s: {int: [-4, 4]}
+    c: {int: [-4, 4]}
+  constraints: ["s != 0 or c != 0"]
+  integrand: "cancel(k/(x - r) + (s*x + c)/(x**2 + q**2))"
+  checkpoints:
+    - type: expr
+      prompt: "Разложи на простые дроби"
+      expected: "k/(x - r) + (s*x + c)/(x**2 + q**2)"
+      same_as: integrand
+      distractors:
+        - "k/(x - r) + c/(x**2 + q**2)"                # потерян Bx в числителе
+        - "k/(x + r) + (s*x + c)/(x**2 + q**2)"        # знак корня
+        - "-k/(x - r) + (s*x + c)/(x**2 + q**2)"       # знак A
+      hint: "A/(x − x₀) + (Bx + C)/(x² + q²): домножь на знаменатель, подставь x = x₀, остальное — сравнением коэффициентов."
+    - type: antiderivative
+      prompt: "Ответ (с +C)"
+      reference: "k*log(Abs(x - r)) + s*log(x**2 + q**2)/2 + c*atan(x/q)/q"
+      domain: [-5.0, 5.0]
+  blitz_method: "разложение на простые дроби"

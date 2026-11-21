@@ -1,0 +1,62 @@
+# §3 Иррациональные
+- id: int_root_lcm_01
+  topic: indef_integral.irrational
+  source: "Демидович, № 1766–1768, 1926–1931 (аналог)"
+  difficulty: B
+  var: x
+  params:
+    a: {int: [1, 3]}
+  integrand: "1/(sqrt(x) + a*x**(1/3))"
+  checkpoints:
+    - type: choice
+      prompt: "Какую замену применишь?"
+      options: ["t = x^(1/6)", "t = √x", "t = ∛x", "x = t²"]
+      correct: ["t = x^(1/6)"]
+      hint: "Корни степеней 2 и 3: замена t = x^(1/НОК(2, 3)) убирает оба."
+    - type: transformed_integrand
+      prompt: "Запиши подынтегральную функцию после замены (по t)"
+      var: t
+      substitution: "x**(1/6)"
+      expected: "6*t**3/(t + a)"
+      distractors:
+        - "t**3/(t + a)"           # потерян множитель 6 из dx = 6t⁵ dt
+        - "6*t**2/(t + a)"         # ошибка в степени при сокращении
+        - "6*t**3/(t**2 + a)"      # √x = t³ и ∛x = t² перепутаны
+      skippable: true
+      hint: "x = t⁶: √x = t³, ∛x = t², dx = 6t⁵ dt"
+    - type: antiderivative
+      prompt: "Ответ (с +C)"
+      reference: "6*(x**(1/2)/3 - a*x**(1/3)/2 + a**2*x**(1/6) - a**3*log(x**(1/6) + a))"
+      domain: [0.1, 4.0]
+  blitz_method: "замена t = x^(1/НОК)"
+
+- id: int_binomial_01
+  topic: indef_integral.irrational
+  source: "Демидович, № 1981–1989 (аналог)"
+  difficulty: C
+  var: x
+  params:
+    a: {int: [1, 5]}
+    b: {int: [1, 4]}
+  integrand: "x**3*sqrt(a + b*x**2)"
+  checkpoints:
+    - type: choice
+      prompt: "Какой случай Чебышёва? (m = 3, n = 2, p = 1/2)"
+      options: ["p ∈ ℤ", "(m+1)/n ∈ ℤ", "(m+1)/n + p ∈ ℤ", "интеграл не берётся"]
+      correct: ["(m+1)/n ∈ ℤ"]
+      hint: "(m + 1)/n = 4/2 = 2 — целое: замена a + bxⁿ = t^s, где s — знаменатель p."
+    - type: transformed_integrand
+      prompt: "Замена t = √(a + bx²). Запиши подынтегральную функцию по t"
+      var: t
+      substitution: "sqrt(a + b*x**2)"
+      expected: "t**2*(t**2 - a)/b**2"
+      distractors:
+        - "t**2*(t**2 - a)/b"       # потерян один 1/b
+        - "t*(t**2 - a)/b**2"       # потерян t из x dx = t dt / b
+        - "t**2*(t**2 + a)/b**2"    # знак в x² = (t² − a)/b
+      skippable: true
+      hint: "x² = (t² − a)/b, x dx = t dt / b"
+    - type: antiderivative
+      prompt: "Ответ (с +C)"
+      reference: "((a + b*x**2)**(5/2)/5 - a*(a + b*x**2)**(3/2)/3)/b**2"
+  blitz_method: "биномиальный дифференциал (Чебышёв)"

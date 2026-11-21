@@ -1,0 +1,30 @@
+# §1 Подстановки: тригонометрические
+- id: int_trig_subst_01
+  topic: indef_integral.subst
+  source: "Демидович, № 1778–1790 (аналог)"
+  difficulty: B
+  var: x
+  params:
+    a: {int: [1, 4]}
+  integrand: "1/(a**2 + x**2)**(3/2)"
+  checkpoints:
+    - type: choice
+      prompt: "Какую замену применишь?"
+      options: ["x = a·tg t", "x = a·sin t", "x = a/cos t", "t = x²"]
+      correct: ["x = a·tg t"]
+      hint: "a² + x² под корнем: x = a·tg t, тогда a² + x² = a²/cos² t."
+    - type: transformed_integrand
+      prompt: "Запиши подынтегральную функцию после замены (по t)"
+      var: t
+      substitution: "atan(x/a)"
+      expected: "cos(t)/a**2"
+      distractors:
+        - "cos(t)/a**3"          # лишний 1/a: забыл a из dx = a dt/cos² t
+        - "cos(t)**2/a**2"       # ошибка в степени cos при сокращении
+        - "sin(t)/a**2"          # перепутал sin и cos
+      skippable: true
+      hint: "dx = a dt / cos² t, (a² + x²)^(3/2) = a³ / cos³ t"
+    - type: antiderivative
+      prompt: "Ответ (с +C)"
+      reference: "x/(a**2*sqrt(a**2 + x**2))"
+  blitz_method: "тригонометрическая подстановка"

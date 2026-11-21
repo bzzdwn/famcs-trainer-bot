@@ -1,0 +1,61 @@
+# §1 По частям
+- id: int_parts_poly_exp_01
+  topic: indef_integral.parts
+  source: "Демидович, № 1795–1801, 2068–2071 (аналог)"
+  difficulty: A
+  var: x
+  params:
+    p: {int: [1, 5]}
+    q: {int: [-5, 5]}
+    a: {int: [-3, 3], exclude: [0]}
+  integrand: "(p*x + q)*exp(a*x)"
+  checkpoints:
+    - type: choice
+      prompt: "Что берёшь за u?"
+      options: ["u = px + q", "u = e^(ax)", "u = (px + q)·e^(ax)", "по частям не нужно"]
+      correct: ["u = px + q"]
+      hint: "За u — многочлен: при дифференцировании его степень падает, а e^(ax) интегрируется легко."
+    - type: antiderivative
+      prompt: "Ответ (с +C)"
+      reference: "exp(a*x)*((p*x + q)/a - p/a**2)"
+      domain: [-2.0, 2.0]
+  blitz_method: "по частям"
+
+- id: int_parts_log_01
+  topic: indef_integral.parts
+  source: "Демидович, № 1791–1792, 1802–1806 (аналог)"
+  difficulty: B
+  var: x
+  params:
+    n: {int: [1, 3]}
+    a: {int: [1, 4]}
+  integrand: "x**n*log(a*x)"
+  checkpoints:
+    - type: choice
+      prompt: "Что берёшь за u?"
+      options: ["u = ln(ax)", "u = xⁿ", "u = xⁿ·ln(ax)", "по частям не нужно"]
+      correct: ["u = ln(ax)"]
+      hint: "За u — то, что упрощается при дифференцировании: (ln ax)′ = 1/x, а xⁿ интегрируется легко."
+    - type: antiderivative
+      prompt: "Ответ (с +C)"
+      reference: "x**(n + 1)/(n + 1)*log(a*x) - x**(n + 1)/(n + 1)**2"
+      domain: [0.2, 3.0]
+  blitz_method: "по частям"
+
+- id: int_parts_cyclic_01
+  topic: indef_integral.parts
+  source: "Демидович, № 1828–1829, 2074–2075 (аналог)"
+  difficulty: B
+  var: x
+  params:
+    a: {int: [-3, 3], exclude: [0]}
+    b: {int: [1, 4]}
+  integrand: "exp(a*x)*cos(b*x)"
+  checkpoints:
+    - type: antiderivative
+      prompt: "Ответ (с +C)"
+      reference: "exp(a*x)*(a*cos(b*x) + b*sin(b*x))/(a**2 + b**2)"
+      domain: [-2.0, 2.0]
+      hint: "Дважды по частям — справа снова появится исходный интеграл; реши уравнение относительно него."
+  blitz_method: "циклическое интегрирование по частям"
+  method_alternatives: ["по частям"]
