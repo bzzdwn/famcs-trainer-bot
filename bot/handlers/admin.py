@@ -9,6 +9,7 @@ from aiogram import F, Router
 from aiogram.filters import Command, CommandObject
 from aiogram.types import BufferedInputFile, Message
 
+from bot import commands
 from bot.bank import reload_bank
 from bot.config import Settings
 from bot.db import DB, DuplicateStudent
@@ -53,7 +54,13 @@ def make_router(admin_tg_id: int) -> Router:
         if not arg.isdigit():
             await message.answer("Формат: /kick &lt;id&gt; (id — из /students)")
             return
+        target = next((s for s in await db.list_students() if s.id == int(arg)), None)
         ok = await db.delete_student(int(arg))
+        if ok and target and target.tg_id != admin_tg_id:
+            try:
+                await commands.reset_chat(message.bot, target.tg_id)   # удалённому — снова меню гостя
+            except Exception:
+                pass
         await message.answer("Удалён." if ok else "Нет студента с таким id.")
 
     @router.message(Command("reload"))

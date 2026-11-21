@@ -7,6 +7,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import Message
 
+from bot import commands
 from bot.config import Settings
 from bot.db import DB, DuplicateStudent
 from bot.registration import InvalidName, check_group_code, normalize_name
@@ -33,10 +34,12 @@ class Reg(StatesGroup):
 
 
 @router.message(CommandStart())
-async def cmd_start(message: Message, state: FSMContext, db: DB):
+async def cmd_start(message: Message, state: FSMContext, db: DB, settings: Settings):
     st = await db.get_student_by_tg(message.from_user.id)
     if st:
         await state.clear()
+        await commands.set_for_chat(message.bot, message.chat.id, registered=True,
+                                    admin=message.from_user.id == settings.admin_tg_id)
         await message.answer(f"Привет, {escape(st.full_name)}! /train — тренировка, /help — синтаксис.")
         return
     await state.set_state(Reg.code)
@@ -53,7 +56,7 @@ async def reg_code(message: Message, state: FSMContext, settings: Settings):
 
 
 @router.message(Reg.name, F.text)
-async def reg_name(message: Message, state: FSMContext, db: DB):
+async def reg_name(message: Message, state: FSMContext, db: DB, settings: Settings):
     try:
         name = normalize_name(message.text)
     except InvalidName as e:
@@ -66,6 +69,8 @@ async def reg_name(message: Message, state: FSMContext, db: DB):
         await state.clear()
         return
     await state.clear()
+    await commands.set_for_chat(message.bot, message.chat.id, registered=True,
+                                admin=message.from_user.id == settings.admin_tg_id)   # /start из меню уходит
     await message.answer(f"Готово, {escape(name)}! 🎉")
     await message.answer(CHEATSHEET)
 

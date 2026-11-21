@@ -7,7 +7,7 @@ KEY="${MATAN_KEY:-$HOME/.ssh/matan_bot}"
 git push
 ssh -i "$KEY" "$HOST" '
   set -e
-  su - bot -c "cd ~/app && git pull --ff-only && venv/bin/pip install -q -r requirements.txt"
+  su - bot -c "cd ~/app && git pull --ff-only && venv/bin/pip install -q -r requirements.lock"
   systemctl restart matan-bot
   sleep 5
   systemctl is-active matan-bot
