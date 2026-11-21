@@ -3,8 +3,16 @@
 #   ./deploy.sh              — полный деплой: pull, зависимости, перезапуск (идущие задачи студентов оборвутся)
 #   ./deploy.sh --templates  — только шаблоны: pull и перечитывание банка без перезапуска (сигнал SIGHUP)
 set -euo pipefail
-HOST="${MATAN_HOST:-root@89.124.76.119}"
-KEY="${MATAN_KEY:-$HOME/.ssh/matan_bot}"
+cd "$(dirname "$0")"
+
+# адрес сервера и ключ — из .env (DEPLOY_HOST, DEPLOY_KEY), чтобы не светить их в публичном репозитории
+env_get() { { grep -E "^$1=" .env 2>/dev/null || true; } | head -1 | cut -d= -f2- | sed 's/[[:space:]]*#.*$//; s/^["'\'']//; s/["'\'']$//'; }
+HOST="${DEPLOY_HOST:-$(env_get DEPLOY_HOST)}"
+KEY="${DEPLOY_KEY:-$(env_get DEPLOY_KEY)}"
+KEY="${KEY/#\~/$HOME}"
+if [[ -z "$HOST" || -z "$KEY" ]]; then
+  echo "Не заданы DEPLOY_HOST / DEPLOY_KEY — добавь их в .env (образец в .env.example)"; exit 1
+fi
 
 if [[ "${1:-}" == "--templates" ]]; then
   git fetch -q origin
