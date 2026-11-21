@@ -42,6 +42,8 @@ def test_integral_latex():
 
 def test_statement_uses_ru_notation():
     for t in BANK.values():
+        if t.statement:                       # условие задано вручную ({{параметры}}) — проверяется отдельно
+            continue
         inst = generate(t, 0)
         assert inst.statement_latex == integral_latex(inst.integrand, t.var)
 

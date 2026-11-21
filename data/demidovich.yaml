@@ -1,0 +1,17 @@
+# Покрытие задачника: Демидович (1995), отдел III. Номер → статус.
+#   covered — задача покрыта шаблоном (template); номер обычно есть в examples шаблона
+#   skip    — в бота не идёт (reason): доказательство, вывод формулы и т.п.
+1628: {status: covered, template: int_poly_power_01}
+1629: {status: covered, template: int_poly_power_01}
+1630: {status: covered, template: int_poly_linprod_01}
+1631: {status: covered, template: int_poly_over_power_01}
+1632: {status: covered, template: int_table_sum_01}
+1633: {status: covered, template: int_poly_over_power_01}
+1634: {status: covered, template: int_root_terms_01}
+1635: {status: covered, template: int_poly_over_power_01}
+1636: {status: covered, template: int_poly_over_power_01}
+1637: {status: covered, template: int_root_binom_sq_01}
+1638: {status: covered, template: int_sqrt_square_01}
+1639: {status: covered, template: int_int_part_01}
+1640: {status: covered, template: int_int_part_01}
+1641: {status: covered, template: int_int_part_01}

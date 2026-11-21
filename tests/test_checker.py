@@ -193,3 +193,13 @@ def test_pool_uses_spawn():
     wm = _get_pool()._pool_manager.worker_manager          # внутренности pebble 5.x
     ctx = next(v for v in vars(wm).values() if hasattr(v, "get_start_method"))
     assert ctx.get_start_method() == "spawn"
+
+
+# --- регрессия: simplify(F' − f) = Piecewise(zoo при x=0, 0) → отношение 1 — это верно, а не «множитель» ---
+
+@pytest.mark.parametrize("user, integrand", [
+    ("2*ln|x| - 2/x + 5/(2*x^2) + C", "2/x + 2/x**2 - 5/x**3"),
+    ("3 ln|x - 1| - 2 ln|x + 2| + C", "3/(x - 1) - 2/(x + 2)"),
+])
+def test_abs_log_sum_is_ok_symbolically(user, integrand):
+    assert check_antiderivative(user, integrand, domain=(0.3, 3.0), symbolic=True).status == OK

@@ -95,6 +95,8 @@ def _symbolic_compare(a: sp.Expr, b: sp.Expr) -> Cmp | None:
         if b != 0:
             r = sp.simplify(a / b)
             if r.is_number and r.is_real and r != 0:
+                if r == 1:          # simplify(a − b) мог дать Piecewise(zoo в точке, 0) — но a/b ≡ 1: равны
+                    return Cmp.EQUAL
                 return Cmp.NEG if r == -1 else Cmp.FACTOR
     except Exception:
         pass

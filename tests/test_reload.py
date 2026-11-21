@@ -19,10 +19,11 @@ def tdir(tmp_path):
 def test_reload_ok_in_place(tdir):
     bank = load_templates(tdir)
     same_obj, n = bank, len(bank)
-    (tdir / "basic.yaml").unlink()                         # убрали шаблон
+    removed = {tid for tid, t in bank.items() if t.file.endswith("basic.yaml")}
+    (tdir / "basic.yaml").unlink()                         # убрали файл с шаблонами
     ok, msg = reload_bank(bank, tdir)
     assert ok and bank is same_obj                         # тот же dict — хендлеры видят новый банк
-    assert len(bank) == n - 1 and "int_diff_under_01" not in bank
+    assert len(bank) == n - len(removed) and not removed & set(bank)
     assert str(len(bank)) in msg
 
 

@@ -85,7 +85,7 @@ class Template:
     integrand: str
     checkpoints: tuple[Checkpoint, ...]
     constraints: tuple[str, ...] = ()
-    statement: str | None = None       # LaTeX; None → sympy.latex(Integral(integrand))
+    statement: str | None = None       # LaTeX с {{параметрами}}; None → sympy.latex(Integral(integrand))
     blitz_method: str | None = None
     method_alternatives: tuple[str, ...] = ()   # тоже рабочие методы: «Сработает, но можно короче»
     examples: tuple[Example, ...] = ()           # сверка с задачником (tests/test_bank.py)
@@ -245,6 +245,12 @@ def parse_template(raw: dict, source: str = "<dict>") -> Template:
         fail("checkpoints: нужен непустой список")
     cps = tuple(_parse_checkpoint(i, cp, var, names, fail) for i, cp in enumerate(cps_raw))
 
+    statement = raw.get("statement")
+    if statement is not None:
+        unknown = set(re.findall(r"\{\{(\w+)\}\}", str(statement))) - names
+        if unknown:
+            fail(f"statement: неизвестные параметры {sorted(unknown)}")
+
     alts = raw.get("method_alternatives", [])
     if not isinstance(alts, list) or not all(isinstance(a, str) and a.strip() for a in alts):
         fail("method_alternatives: ожидался список названий методов")
@@ -272,7 +278,7 @@ def parse_template(raw: dict, source: str = "<dict>") -> Template:
     return Template(
         id=str(raw["id"]), topic=str(raw["topic"]), source=str(raw.get("source", "")),
         difficulty=raw["difficulty"], var=var, params=params, integrand=raw["integrand"],
-        checkpoints=cps, constraints=constraints, statement=raw.get("statement"),
+        checkpoints=cps, constraints=constraints, statement=statement,
         blitz_method=raw.get("blitz_method"), method_alternatives=tuple(alts), examples=tuple(examples),
         file=source,
     )

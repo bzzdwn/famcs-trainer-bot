@@ -26,6 +26,11 @@ def _ru(latex: str) -> str:
     return latex
 
 
+def polish(latex: str) -> str:
+    """Та же постобработка (русская нотация, отступы для mathtext) для LaTeX, написанного вручную."""
+    return _ru(latex)
+
+
 def _to_expr(e: sp.Expr | str, var: str) -> sp.Expr:
     return parse_trusted(e, var) if isinstance(e, str) else e
 

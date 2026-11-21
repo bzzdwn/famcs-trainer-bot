@@ -88,7 +88,7 @@ def test_statement_latex():
 
 def test_statement_override():
     inst = build(toy(statement="\\int s \\, dx"), {"a": 3, "s": 1, "k": 1})
-    assert inst.statement_latex == "\\int s \\, dx"
+    assert inst.statement_latex == r"\int\;\;s \, dx"   # ручное условие тоже проходит постобработку
 
 
 # --- самопроверка ----------------------------------------------------------
@@ -203,3 +203,46 @@ def test_check_example_outside_ranges():
 def test_check_example_runs_self_check():
     with pytest.raises(GenerationError):
         check_example(toy(reference="s*sin(a*x)/a"), Example("1702", {"a": 2, "s": 1, "k": 1}, "sin(2*x)"))
+
+
+# --- Integral(…) в эталоне: берётся на числах, ln u → ln|u| --------------------
+
+def integral_template(integrand, reference, domain):
+    raw = copy.deepcopy(VALID)
+    raw.update(integrand=integrand, checkpoints=[
+        {"type": "antiderivative", "prompt": "?", "reference": reference, "domain": domain, "hint": "h"}])
+    return parse_template(raw)
+
+
+def test_integral_reference():
+    t = integral_template("x**a", "Integral(x**a, x)", [0.5, 3.0])
+    assert build(t, {"a": 2, "s": 1, "k": 1}).checkpoints[0].reference == "x**3/3"
+    self_check(t, {"a": 2, "s": 1, "k": 1})
+
+
+def test_integral_reference_log_gets_abs():
+    t = integral_template("a/x", "Integral(a/x, x)", [-3.0, -0.5])     # отрицательные x: нужен модуль
+    ref = build(t, {"a": 3, "s": 1, "k": 1}).checkpoints[0].reference
+    assert ref == "3*log(Abs(x))"
+    self_check(t, {"a": 3, "s": 1, "k": 1})
+
+
+def test_integral_reference_validation_is_lazy():
+    import time
+    t0 = time.monotonic()                                               # при загрузке с символьными параметрами
+    integral_template("(a + s*x)**k/x", "Integral(expand((a + s*x)**k/x), x)", [0.5, 3.0])   # не интегрируем
+    assert time.monotonic() - t0 < 1.0
+
+
+# --- {{параметр}} в statement -------------------------------------------------
+
+def test_statement_placeholders():
+    t = toy(statement=r"\int {{s}}\cdot{{a}}\cos({{a}}x)\, dx")
+    got = build(t, {"a": 3, "s": -1, "k": 1}).statement_latex
+    assert got == r"\int\;\;-1\cdot3\,\cos(3x)\, dx"     # подстановка + та же постобработка, что и у sympy
+
+
+def test_statement_unknown_placeholder():
+    from core.templates import TemplateError
+    with pytest.raises(TemplateError, match="zz"):
+        toy(statement="\\int {{zz}} x\\, dx")

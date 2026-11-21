@@ -1,11 +1,12 @@
 """Генерация экземпляров задач из шаблонов: параметры → подстановка → самопроверка → дистракторы."""
 import random
+import re
 from dataclasses import dataclass
 
 import sympy as sp
 
 from core.checker import Cmp, numeric_compare
-from core.latex import integral_latex
+from core.latex import integral_latex, polish
 from core.parser import parse_trusted
 from core.templates import DEFAULT_DOMAIN, Template
 
@@ -44,11 +45,16 @@ class Instance:
 # --- вычисление формул шаблона ------------------------------------------------
 
 def _ev(src: str, params: dict[str, int], var: str | None = None, real: bool = False) -> sp.Expr:
-    """Формула шаблона с подставленными числами. Функции sympy (cancel, expand) вычисляются уже на числах."""
+    """Формула шаблона с подставленными числами. Функции sympy (cancel, expand) вычисляются уже на числах.
+    Integral(…) берётся тоже на числах (doit), а ln u в результате заменяется на ln|u|."""
     loc = {k: sp.Integer(v) for k, v in params.items()}
     if var:
         loc[var] = sp.Symbol(var, real=True) if real else sp.Symbol(var)
-    return sp.sympify(src, locals=loc)
+    e = sp.sympify(src, locals=loc)
+    if isinstance(e, sp.Basic) and e.has(sp.Integral):
+        e = e.doit().replace(lambda z: isinstance(z, sp.log) and not isinstance(z.args[0], sp.Abs),
+                             lambda z: sp.log(sp.Abs(z.args[0])))
+    return e
 
 
 def _domain(dom: tuple, params: dict[str, int]) -> tuple[float, float]:
@@ -154,6 +160,11 @@ def make_distractors(expected: str, var: str, domain: tuple[float, float],
 
 # --- сборка -----------------------------------------------------------------
 
+def _fill(statement: str, params: dict[str, int]) -> str:
+    """{{p}} → значение параметра (для ручного LaTeX условия, как в задачнике)."""
+    return re.sub(r"\{\{(\w+)\}\}", lambda m: str(params[m.group(1)]), statement)
+
+
 def build(tpl: Template, params: dict[str, int]) -> Instance:
     """Детерминированная сборка экземпляра по параметрам (для восстановления из БД)."""
     x = tpl.var
@@ -178,7 +189,7 @@ def build(tpl: Template, params: dict[str, int]) -> Instance:
         ))
     return Instance(
         template_id=tpl.id, params=dict(params), integrand=str(f),
-        statement_latex=tpl.statement or integral_latex(f, x),
+        statement_latex=polish(_fill(tpl.statement, params)) if tpl.statement else integral_latex(f, x),
         checkpoints=tuple(cps),
     )
 

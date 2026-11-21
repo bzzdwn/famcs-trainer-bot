@@ -21,3 +21,241 @@
       reference: "(a + s*b*x**2)**(1 - k)/(2*s*b*(1 - k))"
       domain: ["-0.9*sqrt(a/b)", "0.9*sqrt(a/b)"]   # при s = -1 полюса в ±sqrt(a/b)
   blitz_method: "внесение под дифференциал"
+
+# --- Демидович, отдел III, §1, № 1628–1641: таблица + алгебраические преобразования ---
+
+- id: int_poly_power_01
+  topic: indef_integral.basic
+  source: "Демидович, № 1628–1629"
+  difficulty: A
+  var: x
+  params:
+    a: {int: [1, 5]}
+    b: {int: [1, 3]}
+    s: {choice: [1, -1]}
+    m: {choice: [1, 2]}
+    n: {choice: [2, 3, 4]}
+    k: {choice: [0, 1, 2]}
+  integrand: "x**k*(a + s*b*x**m)**n"
+  checkpoints:
+    - type: expr
+      prompt: "Раскрой скобки"
+      expected: "expand(x**k*(a + s*b*x**m)**n)"
+      same_as: integrand
+      distractors:
+        - "expand(x**k*(a**n + (s*b)**n*x**(m*n)))"   # (a + b)ⁿ = aⁿ + bⁿ — потеряны средние члены
+        - "expand(x**k*(a - s*b*x**m)**n)"            # знак в двучлене
+        - "expand((a + s*b*x**m)**n)"                 # забыт множитель xᵏ
+      hint: "(a ± b)ⁿ раскрывается по биному со всеми средними членами; потом умножь на xᵏ."
+    - type: antiderivative
+      prompt: "Ответ (с +C)"
+      reference: "Integral(expand(x**k*(a + s*b*x**m)**n), x)"
+  blitz_method: "почленно по таблице"
+  examples:
+    - {number: 1628, params: {a: 3, b: 1, s: -1, m: 2, n: 3, k: 0}, answer: "27*x - 9*x**3 + 9*x**5/5 - x**7/7"}
+    - {number: 1629, params: {a: 5, b: 1, s: -1, m: 1, n: 4, k: 2},
+       answer: "625*x**3/3 - 125*x**4 + 30*x**5 - 10*x**6/3 + x**7/7"}
+
+- id: int_poly_linprod_01
+  topic: indef_integral.basic
+  source: "Демидович, № 1630"
+  difficulty: A
+  var: x
+  params:
+    p: {int: [-3, 3], exclude: [0]}
+    q: {int: [-3, 3], exclude: [0]}
+    r: {int: [-3, 3], exclude: [0]}
+  integrand: "(1 + p*x)*(1 + q*x)*(1 + r*x)"
+  checkpoints:
+    - type: expr
+      prompt: "Раскрой скобки"
+      expected: "expand((1 + p*x)*(1 + q*x)*(1 + r*x))"
+      same_as: integrand
+      distractors:
+        - "1 + (p + q + r)*x + p*q*r*x**3"                       # потерян член с x²
+        - "1 + (p + q + r)*x + (p*q + q*r + p*r)*x**2"           # потерян член с x³
+        - "expand((1 - p*x)*(1 + q*x)*(1 + r*x))"                # знак в одной скобке
+      hint: "Перемножь две скобки: (1 + px)(1 + qx) = 1 + (p + q)x + pqx², затем умножь на третью."
+    - type: antiderivative
+      prompt: "Ответ (с +C)"
+      reference: "Integral(expand((1 + p*x)*(1 + q*x)*(1 + r*x)), x)"
+  blitz_method: "почленно по таблице"
+  examples:
+    - {number: 1630, params: {p: -1, q: -2, r: -3}, answer: "x - 3*x**2 + 11*x**3/3 - 3*x**4/2"}
+
+- id: int_poly_over_power_01
+  topic: indef_integral.basic
+  source: "Демидович, № 1631, 1633, 1635, 1636"
+  difficulty: A
+  var: x
+  params:
+    a: {int: [1, 4]}
+    b: {int: [1, 3]}
+    s: {choice: [1, -1]}
+    j: {choice: [1, 2]}
+    n: {choice: [1, 2, 3]}
+    m: {int: [1, 5]}
+    d: {choice: [2, 3, 4]}
+  integrand: "(a + s*b*x**j)**n/x**(m/d)"
+  checkpoints:
+    - type: expr
+      prompt: "Раздели почленно на степень x"
+      expected: "expand((a + s*b*x**j)**n/x**(m/d))"
+      same_as: integrand
+      domain: [0.2, 3.0]
+      distractors:
+        - "expand((a + s*b*x**j)**n*x**(m/d))"             # умножил вместо деления
+        - "expand((a - s*b*x**j)**n/x**(m/d))"             # знак в двучлене
+        - "a**n/x**(m/d) + expand((a + s*b*x**j)**n) - a**n"   # поделил только первое слагаемое
+      hint: "Раскрой скобки и раздели каждое слагаемое: xᵖ / xᑫ = x^(p − q); корень — дробная степень."
+    - type: antiderivative
+      prompt: "Ответ (с +C)"
+      reference: "Integral(expand((a + s*b*x**j)**n/x**(m/d)), x)"
+      domain: [0.2, 3.0]
+  blitz_method: "почленно по таблице"
+  examples:
+    - {number: 1631, params: {a: 1, b: 1, s: -1, j: 1, n: 2, m: 4, d: 2}, answer: "x - 1/x - 2*log(Abs(x))"}
+    - {number: 1633, params: {a: 1, b: 1, s: 1, j: 1, n: 1, m: 1, d: 2}, answer: "2*x*sqrt(x)/3 + 2*sqrt(x)"}
+    - {number: 1635, params: {a: 1, b: 1, s: -1, j: 1, n: 3, m: 4, d: 3},
+       answer: "-3/x**(1/3)*(1 + 3*x/2 - 3*x**2/5 + x**3/8)"}
+    - {number: 1636, params: {a: -1, b: 1, s: 1, j: 2, n: 1, m: 5, d: 4},   # (1 − 1/x²)·√(x√x) = (x² − 1)/x^(5/4)
+       answer: "4*(x**2 + 7)/(7*x**(1/4))"}
+
+- id: int_table_sum_01
+  topic: indef_integral.basic
+  source: "Демидович, № 1632"
+  difficulty: A
+  var: x
+  params:
+    c1: {int: [-5, 5], exclude: [0]}
+    c2: {int: [-5, 5], exclude: [0]}
+    c3: {int: [-5, 5], exclude: [0]}
+  integrand: "c1/x + c2/x**2 + c3/x**3"
+  checkpoints:
+    - type: antiderivative
+      prompt: "Ответ (с +C)"
+      reference: "c1*log(Abs(x)) - c2/x - c3/(2*x**2)"
+      domain: [0.3, 3.0]
+      hint: "Почленно по таблице: ∫dx/x = ln|x|, ∫x⁻ⁿdx = x¹⁻ⁿ/(1 − n)."
+  blitz_method: "почленно по таблице"
+  examples:
+    - {number: 1632, params: {c1: 2, c2: 4, c3: 8}, answer: "2*log(Abs(x)) - 4/x - 4/x**2"}   # в книге буква a; здесь a = 2
+
+- id: int_root_terms_01
+  topic: indef_integral.basic
+  source: "Демидович, № 1634"
+  difficulty: A
+  var: x
+  params:
+    u: {int: [-3, 3], exclude: [0]}
+    v: {int: [-3, 3], exclude: [0]}
+    w: {int: [-3, 3], exclude: [0]}
+    r: {choice: [2, 3, 4]}
+  integrand: "(u*sqrt(x) + v*x**(2/3) + w)/x**(1/r)"
+  checkpoints:
+    - type: expr
+      prompt: "Запиши корни степенями и раздели почленно"
+      expected: "expand((u*sqrt(x) + v*x**(2/3) + w)/x**(1/r))"
+      same_as: integrand
+      domain: [0.2, 3.0]
+      distractors:
+        - "expand((u*sqrt(x) + v*x**(2/3) + w)*x**(1/r))"          # умножил вместо деления
+        - "u*x**(1/(2*r)) + v*x**(2/(3*r)) + w*x**(-1/r)"          # поделил показатели вместо вычитания
+        - "expand((u*sqrt(x) + v*x**(2/3))/x**(1/r)) + w"          # свободный член не поделил
+      hint: "ⁿ√(xᵐ) = x^(m/n); при делении степеней показатели вычитаются."
+    - type: antiderivative
+      prompt: "Ответ (с +C)"
+      reference: "Integral(expand((u*sqrt(x) + v*x**(2/3) + w)/x**(1/r)), x)"
+      domain: [0.2, 3.0]
+  blitz_method: "почленно по таблице"
+  examples:
+    - {number: 1634, params: {u: 1, v: -2, w: 1, r: 4},
+       answer: "4*x**(5/4)/5 - 24*x**(17/12)/17 + 4*x**(3/4)/3"}
+
+- id: int_root_binom_sq_01
+  topic: indef_integral.basic
+  source: "Демидович, № 1637"
+  difficulty: A
+  var: x
+  params:
+    p: {int: [2, 5]}
+    q: {int: [2, 5]}
+  integrand: "(sqrt(p*x) - (q*x)**(1/3))**2/x"
+  statement: '\int \frac{\left(\sqrt{{{p}}x} - \sqrt[3]{{{q}}x}\right)^{2}}{x}\, dx'   # sympy переставил бы корни
+  checkpoints:
+    - type: expr
+      prompt: "Раскрой квадрат и раздели на x"
+      expected: "expand((sqrt(p*x) - (q*x)**(1/3))**2/x)"
+      same_as: integrand
+      domain: [0.2, 3.0]
+      distractors:
+        - "(p*x + (q*x)**(2/3))/x"                                  # (a − b)² = a² + b² — без удвоенного
+        - "(p*x - sqrt(p*x)*(q*x)**(1/3) + (q*x)**(2/3))/x"         # удвоенное произведение без 2
+        - "(p*x + 2*sqrt(p*x)*(q*x)**(1/3) + (q*x)**(2/3))/x"       # знак удвоенного произведения
+      hint: "(a − b)² = a² − 2ab + b²; √(px)·∛(qx) = √p·∛q·x^(5/6)."
+    - type: antiderivative
+      prompt: "Ответ (с +C)"
+      reference: "p*x - 12*sqrt(p)*q**(1/3)*x**(5/6)/5 + 3*q**(2/3)*x**(2/3)/2"
+      domain: [0.2, 3.0]
+  blitz_method: "почленно по таблице"
+  examples:
+    - {number: 1637, params: {p: 2, q: 3}, answer: "2*x - 12*(72*x**5)**(1/6)/5 + 3*(9*x**2)**(1/3)/2"}
+
+- id: int_sqrt_square_01
+  topic: indef_integral.basic
+  source: "Демидович, № 1638"
+  difficulty: A
+  var: x
+  params:
+    k: {choice: [1, 2, 3]}
+    m: {int: [1, 5]}
+  integrand: "sqrt(x**(2*k) + x**(-2*k) + 2)/x**m"
+  checkpoints:
+    - type: expr
+      prompt: "Выдели полный квадрат под корнем и упрости"
+      expected: "(x**k + x**(-k))/x**m"
+      same_as: integrand
+      domain: [0.2, 3.0]
+      distractors:
+        - "(x**k - x**(-k))/x**m"                   # знак: (a − b)² вместо (a + b)²
+        - "(x**(2*k) + x**(-2*k))/x**m"             # «сняли» корень, не выделив квадрат
+        - "(x**k + x**(-k) + sqrt(2))/x**m"         # корень суммы как сумма корней
+      hint: "x²ᵏ + x⁻²ᵏ + 2 = (xᵏ + x⁻ᵏ)²."
+    - type: antiderivative
+      prompt: "Ответ (с +C)"
+      reference: "Integral(x**(k - m) + x**(-k - m), x)"
+      domain: [0.2, 3.0]
+  blitz_method: "почленно по таблице"
+  examples:
+    - {number: 1638, params: {k: 2, m: 3}, answer: "log(Abs(x)) - 1/(4*x**4)"}
+
+- id: int_int_part_01
+  topic: indef_integral.basic
+  source: "Демидович, № 1639–1641"
+  difficulty: A
+  var: x
+  params:
+    g: {choice: [1, -1]}
+    s: {choice: [1, -1]}
+    a: {int: [1, 3]}
+    c: {int: [-4, 4]}
+  constraints: ["c != s*a**2"]
+  integrand: "g*(x**2 + c)/(x**2 + s*a**2)"
+  checkpoints:
+    - type: expr
+      prompt: "Выдели целую часть"
+      expected: "g*(1 + (c - s*a**2)/(x**2 + s*a**2))"
+      same_as: integrand
+      distractors:
+        - "g*(1 + (c + s*a**2)/(x**2 + s*a**2))"    # знак при вычитании
+        - "g*(1 + c/(x**2 + s*a**2))"               # забыл вычесть то, что прибавил
+        - "g*(x + (c - s*a**2)/(x**2 + s*a**2))"    # целая часть x вместо 1
+      hint: "x² + c = (x² ± a²) + (c ∓ a²): прибавь и вычти, чтобы в числителе появился знаменатель."
+    - type: antiderivative
+      prompt: "Ответ (с +C)"
+      reference: "Integral(g*(1 + (c - s*a**2)/(x**2 + s*a**2)), x)"
+  blitz_method: "выделение целой части"
+  examples:
+    - {number: 1639, params: {g: 1, s: 1, a: 1, c: 0}, answer: "x - atan(x)"}
+    - {number: 1640, params: {g: -1, s: -1, a: 1, c: 0}, answer: "-x + log(Abs((1 + x)/(1 - x)))/2"}   # x²/(1 − x²)
+    - {number: 1641, params: {g: 1, s: -1, a: 1, c: 3}, answer: "x + 2*log(Abs((x - 1)/(x + 1)))"}
