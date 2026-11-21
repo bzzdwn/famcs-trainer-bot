@@ -148,3 +148,46 @@ def test_countdown_marks():
     assert countdown_marks() == [(7.0, "3…"), (8.0, "2…"), (9.0, "1…")]
     assert countdown_marks(5.0, 2) == [(3.0, "2…"), (4.0, "1…")]
     assert len(countdown_marks()) == COUNTDOWN
+
+
+# --- своё время на карточку ---------------------------------------------------
+
+from bot.blitz import TIME_CHOICES, InvalidTime, parse_time
+
+
+@pytest.mark.parametrize("text, want", [("15", 15), (" 20 ", 20), ("25с", 25), ("25 с", 25), ("60", 60), ("5", 5)])
+def test_parse_time_ok(text, want):
+    assert parse_time(text) == want
+
+
+@pytest.mark.parametrize("text", ["7", "0", "65", "abc", "", "  ", "-10", "12.5"])
+def test_parse_time_bad(text):
+    with pytest.raises(InvalidTime) as e:
+        parse_time(text)
+    assert str(e.value)
+
+
+def test_time_choices():
+    assert TIME_CHOICES == (5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60)
+
+
+def test_custom_time_limit():
+    run = BlitzRun(BANK, seed=3, time_limit=25)
+    assert run.time_limit == 25 and BlitzRun(BANK, seed=3).time_limit == TIME_LIMIT
+    assert run.answer(correct_idx(run.current()), elapsed=25.0).verdict == OK       # ровно лимит — засчитано
+    assert run.answer(correct_idx(run.current()), elapsed=25.5).verdict == SKIP     # позже — не успел
+
+
+def test_custom_time_same_series():
+    a, b = BlitzRun(BANK, seed=4), BlitzRun(BANK, seed=4, time_limit=40)
+    assert [t.template_id for t in a.tasks] == [t.template_id for t in b.tasks]     # время не меняет задачи
+
+
+def test_invalid_time_limit():
+    with pytest.raises(ValueError):
+        BlitzRun(BANK, seed=0, time_limit=7)
+
+
+def test_countdown_for_custom_time():
+    assert countdown_marks(25) == [(22.0, "3…"), (23.0, "2…"), (24.0, "1…")]
+    assert countdown_marks(5) == [(2.0, "3…"), (3.0, "2…"), (4.0, "1…")]

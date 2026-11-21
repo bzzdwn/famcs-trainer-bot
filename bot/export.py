@@ -28,7 +28,7 @@ class StudentRow:
     finished: int                     # задач доведено до конца (solved + revealed)
     first_try: float | None           # доля шагов с 1-й попытки, 0..1 (как в /me)
     topic_first_try: dict[str, float | None]
-    best_blitz: str | None            # «9/10»
+    best_blitz: str | None            # «9/10 · 10 с»
     blitz_runs: int                   # доигранных серий
     last_active: date | None
 
@@ -99,13 +99,13 @@ def _students(students, sessions, attempts, runs, topics, today) -> list[Student
             by_topic[topic][0] += verdict == "ok"
         ok_total = sum(v[0] for v in by_topic.values())
         my_runs = [r for r in runs if r[0] == st_id]
-        best = max(my_runs, key=lambda r: (r[1], -r[2]), default=None)
+        best = max(my_runs, key=lambda r: (r[1], -r[3], -r[2]), default=None)   # счёт ↑, время ↓
         rows.append(StudentRow(
             name=name, days_active=len(days), streak=streak(days, today),
             solved=sum(s["status"] == "solved" for s in counted), finished=len(counted),
             first_try=_rate(ok_total, len(first)),
             topic_first_try={t: _rate(*by_topic[t]) if t in by_topic else None for t in topics},
-            best_blitz=f"{best[1]}/{best[2]}" if best else None, blitz_runs=len(my_runs),
+            best_blitz=f"{best[1]}/{best[2]} · {best[3]} с" if best else None, blitz_runs=len(my_runs),
             last_active=max(days) if days else None,
         ))
     return rows
@@ -170,7 +170,8 @@ async def collect(db: DB, bank: dict[str, Template], today: date | None = None) 
                         "a.checkpoint_idx, a.checkpoint_type, a.raw_input, a.verdict, a.hint_used, a.created_at "
                         "FROM attempts a JOIN sessions s ON s.id = a.session_id "
                         "JOIN instances i ON i.id = s.instance_id ORDER BY a.id")]
-    runs = await _fetch(db, "SELECT student_id, score, total FROM blitz_runs WHERE finished_at IS NOT NULL")
+    runs = await _fetch(db, "SELECT student_id, score, total, COALESCE(time_limit, 10) FROM blitz_runs "
+                            "WHERE finished_at IS NOT NULL")
     topics = list(TOPIC_NAMES)
     return ExportData(
         topics=topics,

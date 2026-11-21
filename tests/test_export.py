@@ -81,7 +81,7 @@ async def test_students(data):
     assert ivan.first_try == pytest.approx(0.5)                     # 5 из 10 шагов, брошенная — не в счёт
     assert ivan.topic_first_try[TRIG] == pytest.approx(0.5)
     assert ivan.topic_first_try[PARTS_T] is None                    # только брошенная задача
-    assert (ivan.best_blitz, ivan.blitz_runs, ivan.last_active) == ("9/10", 2, TODAY)
+    assert (ivan.best_blitz, ivan.blitz_runs, ivan.last_active) == ("9/10 · 10 с", 2, TODAY)
     assert (petr.days_active, petr.streak, petr.solved, petr.finished) == (1, 1, 1, 1)
     assert petr.first_try == pytest.approx(2 / 3) and petr.best_blitz is None
     assert (sid.days_active, sid.streak, sid.solved, sid.finished, sid.first_try,

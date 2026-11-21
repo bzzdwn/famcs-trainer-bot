@@ -87,6 +87,10 @@ async def test_student_stats(db):
     await db.finish_blitz_run(r1, 7, 10)
     r2 = await db.start_blitz_run(me)
     await db.finish_blitz_run(r2, 9, 10)
+    r5 = await db.start_blitz_run(me, time_limit=30)                 # тот же счёт, но с бо́льшим временем
+    await db.finish_blitz_run(r5, 9, 10)
+    r6 = await db.start_blitz_run(me, time_limit=5)                  # меньше время, но и счёт ниже
+    await db.finish_blitz_run(r6, 8, 10)
     await db.start_blitz_run(me)                     # недоигранный — не в счёт
     r4 = await db.start_blitz_run(other)
     await db.finish_blitz_run(r4, 10, 10)
@@ -95,7 +99,7 @@ async def test_student_stats(db):
     assert st.topics == {"indef_integral.trig": (1, 1), "indef_integral.parts": (1, 2)}
     assert (st.points, st.first_try) == (5, 3)         # trig: 3 точки, 2 с 1-й; direct: 1 из 1; revealed: 0 из 1
     assert st.first_try_pct == pytest.approx(60.0)
-    assert st.best_blitz == (9, 10)
+    assert st.best_blitz == (9, 10, 10)                             # лучший счёт; при равенстве — меньшее время
     assert st.streak == 4                               # d0..d3 подряд, d5 отдельно
 
 

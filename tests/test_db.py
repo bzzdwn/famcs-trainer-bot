@@ -162,3 +162,30 @@ async def test_ocr_log_and_daily_count(db):
     assert await db.count_ocr_today(1, today) == 2                # unreadable тоже тратит лимит
     assert await db.count_ocr_today(2, today) == 1
     assert await db.count_ocr_today(1, date(2026, 11, 1)) == 1
+
+
+async def test_blitz_time_limit(db):
+    r = await db.start_blitz_run(5, time_limit=25)
+    (t,), = await rows(db, "SELECT time_limit FROM blitz_runs WHERE id=?", r)
+    assert t == 25
+    r2 = await db.start_blitz_run(5)
+    (t2,), = await rows(db, "SELECT time_limit FROM blitz_runs WHERE id=?", r2)
+    assert t2 == 10
+
+
+async def test_blitz_runs_migration(tmp_path):
+    import aiosqlite
+    path = str(tmp_path / "old.db")
+    conn = await aiosqlite.connect(path)
+    await conn.execute("CREATE TABLE blitz_runs (id INTEGER PRIMARY KEY, student_id INT, started_at TEXT, "
+                       "finished_at TEXT, score INT, total INT)")
+    await conn.execute("INSERT INTO blitz_runs (student_id, started_at, finished_at, score, total) "
+                       "VALUES (1, '2026-11-20T12:00:00+03:00', '2026-11-20T12:02:00+03:00', 8, 10)")
+    await conn.commit()
+    await conn.close()
+    d = await DB.open(path)
+    async with d.conn.execute("PRAGMA table_info(blitz_runs)") as cur:
+        assert "time_limit" in {r[1] for r in await cur.fetchall()}
+    from bot.stats import student_stats
+    assert (await student_stats(d, 1)).best_blitz == (8, 10, 10)        # старые серии — по 10 с
+    await d.close()

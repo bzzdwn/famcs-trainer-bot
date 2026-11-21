@@ -1,5 +1,6 @@
 """Блиц: 10 задач, 4 кнопки с методами, 10 секунд на ответ. Чистая логика, без Telegram."""
 import random
+import re
 from dataclasses import dataclass
 
 from core.generator import Instance, generate
@@ -12,6 +13,19 @@ OK, WRONG, SKIP = "ok", "wrong", "skip"
 
 
 COUNTDOWN = 3            # последние секунды задачи: «3…», «2…», «1…»
+TIME_CHOICES = tuple(range(5, 61, 5))   # своё время на карточку: 5, 10, …, 60 с
+
+
+class InvalidTime(ValueError):
+    """str(e) — сообщение студенту."""
+
+
+def parse_time(text: str) -> int:
+    """«25», « 25 с», «25с» → 25. Не из TIME_CHOICES → InvalidTime."""
+    m = re.fullmatch(r"\s*(\d+)\s*(?:с|сек|s)?\s*", text or "")
+    if not m or int(m.group(1)) not in TIME_CHOICES:
+        raise InvalidTime("Нужно число секунд от 5 до 60, кратное 5, например 25")
+    return int(m.group(1))
 
 
 def countdown_marks(limit: float = TIME_LIMIT, n: int = COUNTDOWN) -> list[tuple[float, str]]:
@@ -53,9 +67,13 @@ class BlitzSummary:
 
 
 class BlitzRun:
-    def __init__(self, bank: dict[str, Template], seed: int, size: int = BLITZ_SIZE):
+    def __init__(self, bank: dict[str, Template], seed: int, size: int = BLITZ_SIZE,
+                 time_limit: float = TIME_LIMIT):
         """Серия из size задач по шаблонам с blitz_method; без повторов, пока шаблонов хватает.
         Различных методов < N_OPTIONS → ValueError."""
+        if time_limit not in TIME_CHOICES:
+            raise ValueError(f"время на карточку {time_limit} — не из {TIME_CHOICES}")
+        self._time_limit = time_limit
         eligible = sorted((t for t in bank.values() if t.blitz_method), key=lambda t: t.id)
         methods = sorted({t.blitz_method for t in eligible})
         if len(methods) < N_OPTIONS:
@@ -76,6 +94,10 @@ class BlitzRun:
         self._answers: list[BlitzAnswer] = []
 
     @property
+    def time_limit(self) -> float:
+        return self._time_limit
+
+    @property
     def tasks(self) -> tuple[BlitzTask, ...]:
         return self._tasks
 
@@ -94,7 +116,7 @@ class BlitzRun:
         if i is not None and not 0 <= i < len(task.options):
             raise ValueError(f"нет кнопки {i}")
         idx = len(self._answers)
-        if i is None or elapsed > TIME_LIMIT:
+        if i is None or elapsed > self._time_limit:
             ans = BlitzAnswer(idx, None, SKIP, elapsed)
         else:
             chosen = task.options[i]

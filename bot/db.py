@@ -23,7 +23,7 @@ CREATE TABLE IF NOT EXISTS ocr_requests (id INTEGER PRIMARY KEY, student_id INT,
                                          recognized TEXT, status TEXT, created_at TEXT,
                                          markdown TEXT, attempt_id INT);
 CREATE TABLE IF NOT EXISTS blitz_runs (id INTEGER PRIMARY KEY, student_id INT, started_at TEXT, finished_at TEXT,
-                                       score INT, total INT);
+                                       score INT, total INT, time_limit INT);
 """
 
 
@@ -75,7 +75,8 @@ class DB:
         return cls(conn)
 
     # колонки, добавленные после первых запусков: CREATE TABLE IF NOT EXISTS их в старую базу не добавит
-    MIGRATIONS = {"ocr_requests": {"markdown": "TEXT", "attempt_id": "INT"}}
+    MIGRATIONS = {"ocr_requests": {"markdown": "TEXT", "attempt_id": "INT"},
+                  "blitz_runs": {"time_limit": "INT"}}          # старые серии: NULL = 10 с
 
     @classmethod
     async def _migrate(cls, conn: aiosqlite.Connection) -> None:
@@ -154,8 +155,9 @@ class DB:
         return cur.lastrowid
 
     # --- блиц
-    async def start_blitz_run(self, student_id: int) -> int:
-        cur = await self._exec("INSERT INTO blitz_runs (student_id, started_at) VALUES (?, ?)", student_id, _now())
+    async def start_blitz_run(self, student_id: int, time_limit: int = 10) -> int:
+        cur = await self._exec("INSERT INTO blitz_runs (student_id, started_at, time_limit) VALUES (?, ?, ?)",
+                               student_id, _now(), time_limit)
         return cur.lastrowid
 
     async def finish_blitz_run(self, run_id: int, score: int, total: int) -> None:

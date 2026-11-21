@@ -28,7 +28,8 @@ async def cmd_me(message: Message, db: DB):
         return
     st = await student_stats(db, student.id)
     pct = f"{st.first_try_pct:.0f}% ({st.first_try} из {st.points} шагов)" if st.points else "—"
-    blitz = f"{st.best_blitz[0]}/{st.best_blitz[1]}" if st.best_blitz else "ещё не было — /blitz"
+    blitz = (f"{st.best_blitz[0]}/{st.best_blitz[1]} · {st.best_blitz[2]} с на карточку" if st.best_blitz
+             else "ещё не было — /blitz")
     lines = [
         f"<b>{escape(student.full_name)}</b>",
         f"🔥 Серия: {st.streak} {days_word(st.streak)} подряд",

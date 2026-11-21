@@ -14,7 +14,7 @@ class Stats:
     topics: dict[str, tuple[int, int]]   # topic → (решено без показа ответа, всего доведено до конца)
     points: int                          # контрольных точек в учтённых задачах
     first_try: int                       # из них с первой попытки
-    best_blitz: tuple[int, int] | None   # (счёт, из скольких)
+    best_blitz: tuple[int, int, int] | None   # (счёт, из скольких, секунд на карточку)
     streak: int                          # дней подряд с активностью
 
     @property
@@ -71,8 +71,9 @@ async def student_stats(db: DB, student_id: int, today: date | None = None) -> S
             *counted[1], *NOT_SPENT):
         first.setdefault((sid, cp), verdict)
 
-    best = await _fetch(db, "SELECT score, total FROM blitz_runs WHERE student_id = ? AND finished_at IS NOT NULL "
-                            "ORDER BY score DESC, total ASC LIMIT 1", student_id)
+    best = await _fetch(db, "SELECT score, total, COALESCE(time_limit, 10) AS t FROM blitz_runs "
+                            "WHERE student_id = ? AND finished_at IS NOT NULL "
+                            "ORDER BY score DESC, t ASC, total ASC LIMIT 1", student_id)
 
     days = {local_date(ts) for (ts,) in await _fetch(
         db, "SELECT a.created_at FROM attempts a JOIN sessions s ON s.id = a.session_id WHERE s.student_id = ?",

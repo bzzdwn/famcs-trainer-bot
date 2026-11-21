@@ -10,7 +10,7 @@ from aiogram.dispatcher.event.bases import SkipHandler
 from aiogram.filters import Command
 from aiogram.types import BufferedInputFile, CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
 
-from bot.blitz import OK, SKIP, TIME_LIMIT, BlitzAnswer, BlitzRun, countdown_marks
+from bot.blitz import OK, SKIP, TIME_LIMIT, BlitzAnswer, BlitzRun, InvalidTime, countdown_marks, parse_time
 from bot.db import DB
 from bot.render import render_or_text
 from core.templates import Template
@@ -42,7 +42,9 @@ def cancel_blitz(chat_id: int) -> bool:
         st.timer.cancel()
     if st:
         asyncio.create_task(clear_countdown(st))
-    return st is not None
+    was_waiting = chat_id in WAIT_TIME          # передумал вводить время — /stop или /train снимают ожидание
+    WAIT_TIME.discard(chat_id)
+    return st is not None or was_waiting
 
 
 async def clear_countdown(st: BlitzState):
@@ -71,7 +73,7 @@ async def send_task(chat_id: int, db: DB):
         await finish(chat_id, db)
         return
     idx = _idx(st)
-    caption = f"{idx + 1}/{len(st.run.tasks)} · {int(TIME_LIMIT)} с · какой метод?"
+    caption = f"{idx + 1}/{len(st.run.tasks)} · {int(st.run.time_limit)} с · какой метод?"
     img = st.images[idx]
     if isinstance(img, bytes):
         st.task_msg = await st.message.answer_photo(BufferedInputFile(img, "b.png"), caption=caption,
@@ -90,19 +92,20 @@ def _same_task(chat_id: int, idx: int) -> BlitzState | None:
 async def _timeout(chat_id: int, idx: int, db: DB):
     """Отсчёт «3… 2… 1…» в последние секунды, затем — время вышло. Отменяется при ответе."""
     elapsed = 0.0
-    for at, text in countdown_marks():
+    limit = BLITZ[chat_id].run.time_limit if chat_id in BLITZ else TIME_LIMIT
+    for at, text in countdown_marks(limit):
         await asyncio.sleep(at - elapsed)
         elapsed = at
         st = _same_task(chat_id, idx)
         if st is None:
             return
         st.countdown.append(await st.message.answer(text))
-    await asyncio.sleep(TIME_LIMIT - elapsed)
+    await asyncio.sleep(limit - elapsed)
     st = _same_task(chat_id, idx)
     if st is None:
         return
     await clear_countdown(st)
-    ans = st.run.answer(None, TIME_LIMIT)
+    ans = st.run.answer(None, st.run.time_limit)
     try:
         await st.task_msg.edit_reply_markup(reply_markup=None)
     except Exception:
@@ -140,24 +143,43 @@ async def finish(chat_id: int, db: DB):
             lines.append(line)
     else:
         lines.append("Без ошибок! 🔥")
-    kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="Ещё блиц", callback_data="blitz")]])
+    t = int(st.run.time_limit)
+    kb = InlineKeyboardMarkup(inline_keyboard=[[
+        InlineKeyboardButton(text=f"Ещё блиц · {t} с", callback_data=f"bt:{t}"),
+        InlineKeyboardButton(text="Другое время", callback_data="blitz")]])
     await st.message.answer("\n".join(lines), reply_markup=kb)
 
 
-async def start_blitz(message: Message, tg_id: int, db: DB, bank: dict[str, Template]):
+WAIT_TIME: set[int] = set()            # чаты, где ждём число секунд сообщением
+
+
+async def ask_time(message: Message, tg_id: int, db: DB):
+    """Шаг перед блицем: стандартные 10 с или своё время."""
+    if not await db.get_student_by_tg(tg_id):
+        await message.answer("Сначала зарегистрируйся: /start")
+        return
+    WAIT_TIME.discard(message.chat.id)
+    kb = InlineKeyboardMarkup(inline_keyboard=[[
+        InlineKeyboardButton(text=f"⏱ {int(TIME_LIMIT)} с", callback_data=f"bt:{int(TIME_LIMIT)}"),
+        InlineKeyboardButton(text="Указать вручную", callback_data="bt:custom")]])
+    await message.answer("⚡ Блиц: 10 задач на выбор метода. Сколько времени на карточку?", reply_markup=kb)
+
+
+async def start_blitz(message: Message, tg_id: int, db: DB, bank: dict[str, Template], time_limit: int):
     student = await db.get_student_by_tg(tg_id)
     if not student:
         await message.answer("Сначала зарегистрируйся: /start")
         return
+    WAIT_TIME.discard(message.chat.id)
     from bot.handlers.train import close_current      # ленивый импорт: train ↔ blitz
     await close_current(message.chat.id, db)
     cancel_blitz(message.chat.id)
-    await message.answer(f"⚡ Блиц: 10 задач, {int(TIME_LIMIT)} секунд на каждую. Выбери метод решения.\n"
+    await message.answer(f"⚡ Блиц: 10 задач, {time_limit} секунд на каждую. Выбери метод решения.\n"
                          "Готовлю задачи…")
-    run = await asyncio.to_thread(BlitzRun, bank, secrets.randbits(32))
+    run = await asyncio.to_thread(BlitzRun, bank, secrets.randbits(32), time_limit=time_limit)
     images = await asyncio.to_thread(
         lambda: [render_or_text(t.instance.statement_latex, t.instance.statement_latex) for t in run.tasks])
-    run_id = await db.start_blitz_run(student.id)
+    run_id = await db.start_blitz_run(student.id, time_limit=time_limit)
     BLITZ[message.chat.id] = BlitzState(run, run_id, student.id, images, dict(bank), message)
     for n in ("3", "2", "1"):
         await message.answer(n)
@@ -168,14 +190,36 @@ async def start_blitz(message: Message, tg_id: int, db: DB, bank: dict[str, Temp
 
 
 @router.message(Command("blitz"))
-async def cmd_blitz(message: Message, db: DB, bank: dict[str, Template]):
-    await start_blitz(message, message.from_user.id, db, bank)
+async def cmd_blitz(message: Message, db: DB):
+    await ask_time(message, message.from_user.id, db)
 
 
 @router.callback_query(F.data == "blitz")
-async def cb_blitz(cb: CallbackQuery, db: DB, bank: dict[str, Template]):
+async def cb_blitz(cb: CallbackQuery, db: DB):
     await cb.answer()
-    await start_blitz(cb.message, cb.from_user.id, db, bank)
+    await ask_time(cb.message, cb.from_user.id, db)
+
+
+@router.callback_query(F.data.startswith("bt:"))
+async def cb_time(cb: CallbackQuery, db: DB, bank: dict[str, Template]):
+    await cb.answer()
+    await cb.message.edit_reply_markup(reply_markup=None)
+    choice = cb.data[3:]
+    if choice == "custom":
+        WAIT_TIME.add(cb.message.chat.id)
+        await cb.message.answer("Напиши, сколько секунд на карточку: от 5 до 60, кратное 5 (например, 25).")
+        return
+    await start_blitz(cb.message, cb.from_user.id, db, bank, time_limit=int(choice))
+
+
+@router.message(F.text & ~F.text.startswith("/"), F.chat.id.func(lambda cid: cid in WAIT_TIME))
+async def on_time_text(message: Message, db: DB, bank: dict[str, Template]):
+    try:
+        seconds = parse_time(message.text)
+    except InvalidTime as e:
+        await message.answer(escape(str(e)))
+        return
+    await start_blitz(message, message.from_user.id, db, bank, time_limit=seconds)
 
 
 @router.callback_query(F.data.startswith("z:"))
