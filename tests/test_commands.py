@@ -17,7 +17,7 @@ def test_student_has_no_start():
 def test_admin_sees_admin_commands():
     n = names(commands_for(True, True))
     assert n[:len(STUDENT)] == names(STUDENT)
-    assert {"students", "rename", "kick", "export", "reload", "ocrdump"} <= set(n)
+    assert {"students", "rename", "kick", "broadcast", "export", "reload", "ocrdump"} <= set(n)
     assert "students" not in names(commands_for(True, False))
 
 

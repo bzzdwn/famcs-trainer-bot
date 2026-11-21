@@ -1,4 +1,4 @@
-"""Команды преподавателя: /students, /rename, /kick, /reload, /export, /ocrdump. Доступны только ADMIN_TG_ID."""
+"""Команды преподавателя: /students, /rename, /kick, /broadcast, /reload, /export, /ocrdump. Доступны только ADMIN_TG_ID."""
 import asyncio
 import logging
 from datetime import datetime
@@ -7,10 +7,11 @@ from io import BytesIO
 
 from aiogram import F, Router
 from aiogram.filters import Command, CommandObject
-from aiogram.types import BufferedInputFile, Message
+from aiogram.types import BufferedInputFile, CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
 
 from bot import commands
 from bot.bank import reload_bank
+from bot.broadcast import BroadcastError, broadcast, recipients, validate_text
 from bot.config import Settings
 from bot.db import DB, DuplicateStudent
 from bot.export import build_xlsx, collect
@@ -22,6 +23,41 @@ from bot.registration import InvalidName, normalize_name
 def make_router(admin_tg_id: int) -> Router:
     router = Router()
     router.message.filter(F.from_user.id == admin_tg_id)
+    router.callback_query.filter(F.from_user.id == admin_tg_id)
+    pending: dict[str, str] = {}                     # текст рассылки, ожидающий подтверждения
+
+    @router.message(Command("broadcast"))
+    async def cmd_broadcast(message: Message, command: CommandObject, db: DB):
+        try:
+            text = validate_text(command.args or "")
+        except BroadcastError as e:
+            await message.answer(escape(str(e)))
+            return
+        n = len(recipients(await db.list_students(), admin_tg_id))
+        if n == 0:
+            await message.answer("Некому отправлять: студентов пока нет.")
+            return
+        pending["text"] = text
+        kb = InlineKeyboardMarkup(inline_keyboard=[[
+            InlineKeyboardButton(text=f"Отправить всем ({n})", callback_data="bc:send"),
+            InlineKeyboardButton(text="Отмена", callback_data="bc:cancel")]])
+        await message.answer(f"Разослать это всем студентам ({n})?\n\n{escape(text)}", reply_markup=kb)
+
+    @router.callback_query(F.data.startswith("bc:"))
+    async def cb_broadcast(cb: CallbackQuery, db: DB):
+        await cb.answer()
+        await cb.message.edit_reply_markup(reply_markup=None)
+        text = pending.pop("text", None)
+        if cb.data == "bc:cancel" or text is None:
+            await cb.message.answer("Рассылка отменена." if text else "Это превью уже неактуально.")
+            return
+        async with waiting(cb.message, "Рассылаю…"):
+            rep = await broadcast(recipients(await db.list_students(), admin_tg_id), text,
+                                  lambda tg_id, t: cb.bot.send_message(tg_id, t, parse_mode=None))
+        msg = f"Доставлено: {rep.delivered}."
+        if rep.failed:
+            msg += f"\nНе доставлено ({len(rep.failed)}): " + escape(", ".join(rep.failed))
+        await cb.message.answer(msg)
 
     @router.message(Command("students"))
     async def cmd_students(message: Message, db: DB):
