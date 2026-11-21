@@ -1,4 +1,4 @@
-"""Команды преподавателя: /students, /rename, /kick, /broadcast, /reload, /export, /ocrdump. Доступны только ADMIN_TG_ID."""
+"""Команды преподавателя: /students, /rename, /kick, /broadcast, /reload, /preview, /export, /ocrdump. Доступны только ADMIN_TG_ID."""
 import asyncio
 import logging
 from datetime import datetime
@@ -15,6 +15,8 @@ from bot.broadcast import BroadcastError, broadcast, recipients, validate_text
 from bot.config import Settings
 from bot.db import DB, DuplicateStudent
 from bot.export import build_xlsx, collect
+from bot.preview import MAX_N, preview_items, preview_lines
+from bot.render import render_lines
 from bot.ocrdump import build_ocr_dump
 from bot.waiting import waiting
 from bot.registration import InvalidName, normalize_name
@@ -114,6 +116,22 @@ def make_router(admin_tg_id: int) -> Router:
         await message.answer_document(
             BufferedInputFile(xlsx, f"export_{datetime.now():%Y%m%d_%H%M}.xlsx"),
             caption=f"Студентов: {len(data.students)}. Листы: Студенты, Шаблоны, Блиц, Вразнобой")
+
+    @router.message(Command("preview"))
+    async def cmd_preview(message: Message, command: CommandObject, bank: dict):
+        args = (command.args or "").split()
+        if not args or args[0] not in bank:
+            ids = "\n".join(sorted(bank))
+            await message.answer(f"Формат: /preview &lt;id&gt; [сколько, до {MAX_N}]\n\nШаблоны:\n<code>{ids}</code>")
+            return
+        n = int(args[1]) if len(args) > 1 and args[1].isdigit() else 5
+        tpl = bank[args[0]]
+        async with waiting(message, "Генерирую примеры…"):
+            items = await asyncio.to_thread(preview_items, tpl, n, int(datetime.now().timestamp()))
+            cards = await asyncio.to_thread(lambda: [render_lines(preview_lines(it)) for it in items])
+        for k, card in enumerate(cards, 1):
+            await message.answer_photo(BufferedInputFile(card, f"preview_{k}.png"),
+                                       caption=f"{escape(tpl.id)} · {k}/{len(cards)}")
 
     @router.message(Command("ocrdump"))
     async def cmd_ocrdump(message: Message, command: CommandObject, db: DB):

@@ -98,3 +98,15 @@ def test_check_time(tid):
 def _pool():
     yield
     shutdown_pool()
+
+
+# --- сверка с задачником: каждый пример из examples ----------------------------
+
+from core.generator import check_example
+
+EXAMPLES = [(tid, ex) for tid in IDS for ex in BANK[tid].examples]
+
+
+@pytest.mark.parametrize("tid, ex", EXAMPLES, ids=[f"{t}-{e.number}" for t, e in EXAMPLES])
+def test_examples_match_book(tid, ex):
+    check_example(BANK[tid], ex)

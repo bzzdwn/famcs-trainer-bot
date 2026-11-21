@@ -1,12 +1,15 @@
 """Запуск: venv/bin/python -m bot"""
 import asyncio
 import logging
+import signal
+from html import escape
 
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
 from aiogram.fsm.storage.memory import MemoryStorage
 
 from bot import commands
+from bot.bank import reload_bank
 from bot.config import load_settings
 from bot.db import DB
 from bot.ocr import YandexOcr
@@ -14,6 +17,18 @@ from bot.handlers import admin, blitz, me, start, train
 from core.checker import check_with_timeout, shutdown_pool
 from core.templates import load_templates
 
+
+
+async def reload_on_signal(bot: Bot, bank: dict, settings) -> None:
+    """SIGHUP (deploy.sh --templates): перечитать шаблоны без рестарта и сообщить админу."""
+    ok, msg = await asyncio.to_thread(reload_bank, bank, settings.templates_dir)
+    logging.info("SIGHUP: перезагрузка шаблонов: %s %s", ok, msg)
+    try:
+        await bot.send_message(settings.admin_tg_id,
+                               ("🔄 Шаблоны обновлены. " if ok else "❌ Шаблоны не обновлены, банк прежний.\n")
+                               + escape(msg))
+    except Exception as exc:
+        logging.warning("не смог сообщить админу о перезагрузке: %s", exc)
 
 
 async def main() -> None:
@@ -36,6 +51,11 @@ async def main() -> None:
     await commands.set_for_chat(bot, settings.admin_tg_id,
                                 registered=await db.get_student_by_tg(settings.admin_tg_id) is not None,
                                 admin=True)
+    try:
+        asyncio.get_running_loop().add_signal_handler(
+            signal.SIGHUP, lambda: asyncio.create_task(reload_on_signal(bot, bank, settings)))
+    except (NotImplementedError, AttributeError):    # Windows: сигналов нет — только /reload
+        pass
     try:
         await dp.start_polling(bot)
     finally:

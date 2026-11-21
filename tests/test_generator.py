@@ -176,3 +176,30 @@ def test_self_check_same_as_formula():
     raw["checkpoints"][1]["same_as"] = "x**2 + a*x + a**2"          # опечатка в шаблоне
     with pytest.raises(GenerationError):
         self_check(parse_template(raw), {"a": 2, "s": 1, "k": 1})
+
+
+# --- сверка с задачником -------------------------------------------------------
+
+from core.generator import check_example
+from core.templates import Example
+
+
+@pytest.mark.parametrize("answer", ["sin(2*x)", "sin(2*x) + 7", "2*sin(x)*cos(x)"])   # любая форма, любая константа
+def test_check_example_ok(answer):
+    check_example(TOY, Example("1700", {"a": 2, "s": 1, "k": 1}, answer))
+
+
+@pytest.mark.parametrize("answer", ["sin(2*x)/2", "-sin(2*x)", "cos(2*x)"])
+def test_check_example_mismatch(answer):
+    with pytest.raises(GenerationError, match="1700"):
+        check_example(TOY, Example("1700", {"a": 2, "s": 1, "k": 1}, answer))
+
+
+def test_check_example_outside_ranges():
+    # в книге числа могут выходить за диапазон генератора — сверка всё равно работает
+    check_example(TOY, Example("1701", {"a": 9, "s": 1, "k": 1}, "sin(9*x)"))
+
+
+def test_check_example_runs_self_check():
+    with pytest.raises(GenerationError):
+        check_example(toy(reference="s*sin(a*x)/a"), Example("1702", {"a": 2, "s": 1, "k": 1}, "sin(2*x)"))

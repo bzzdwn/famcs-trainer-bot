@@ -181,3 +181,38 @@ def test_bank_alternatives():
     assert bank["int_trig_tan_01"].method_alternatives == ("универсальная замена",)
     assert bank["int_trig_odd_sin_01"].method_alternatives == ("универсальная замена",)
     assert bank["int_parts_cyclic_01"].method_alternatives == ("по частям",)
+
+
+# --- examples: сверка с задачником --------------------------------------------
+
+def with_examples(examples):
+    raw = copy.deepcopy(VALID)
+    raw["examples"] = examples
+    return raw
+
+
+def test_examples_parsed():
+    t = parse_template(with_examples([{"number": 1700, "params": {"a": 2, "s": 1, "k": 1}, "answer": "sin(2*x)"}]))
+    (ex,) = t.examples
+    assert (ex.number, ex.params, ex.answer) == ("1700", {"a": 2, "s": 1, "k": 1}, "sin(2*x)")
+    assert parse_template(VALID).examples == ()
+
+
+@pytest.mark.parametrize("ex", [
+    {"number": 1, "params": {"a": 2, "s": 1}, "answer": "x"},                       # нет параметра k
+    {"number": 1, "params": {"a": 2, "s": 1, "k": 1, "b": 3}, "answer": "x"},       # лишний параметр
+    {"number": 1, "params": {"a": 2.5, "s": 1, "k": 1}, "answer": "x"},             # не целое
+    {"number": 1, "params": {"a": 2, "s": 1, "k": 1}, "answer": "y + 1"},           # чужая переменная
+    {"number": 1, "params": {"a": 2, "s": 1, "k": 1}, "answer": "sin(x"},           # синтаксис
+    {"params": {"a": 2, "s": 1, "k": 1}, "answer": "x"},                             # нет номера
+    {"number": 1, "params": {"a": 2, "s": 1, "k": 1}},                               # нет ответа
+    {"number": 1, "params": {"a": 2, "s": 1, "k": 1}, "answer": "x", "note": "?"},   # неизвестный ключ
+])
+def test_examples_invalid(ex):
+    with pytest.raises(TemplateError):
+        parse_template(with_examples([ex]))
+
+
+def test_examples_must_be_list():
+    with pytest.raises(TemplateError):
+        parse_template(with_examples({"number": 1}))

@@ -121,6 +121,19 @@ def self_check(tpl: Template, params: dict[str, int]) -> None:
 
 # --- дистракторы ------------------------------------------------------------
 
+def check_example(tpl: Template, ex) -> None:
+    """Номер из книги: шаблон при ex.params проходит самопроверку, а ответ книги — первообразная integrand.
+    Расхождение → GenerationError (значит, опечатка в шаблоне или в переносе ответа)."""
+    self_check(tpl, ex.params)
+    x = tpl.var
+    xs = sp.Symbol(x, real=True)
+    f = _ev(tpl.integrand, ex.params, x, real=True)
+    F = sp.sympify(ex.answer, locals={x: xs})
+    res = numeric_compare(sp.diff(F, xs), f, x, _main_domain(tpl, ex.params))
+    if res is not Cmp.EQUAL:
+        raise GenerationError(f"{tpl.id} № {ex.number}: ответ книги не первообразная integrand ({res.value})")
+
+
 def make_distractors(expected: str, var: str, domain: tuple[float, float],
                      manual: tuple[str, ...] = ()) -> tuple[str, ...]:
     """Сначала ручные, потом −e, 2e, e/2; эквивалентные эталону или друг другу отбрасываются.

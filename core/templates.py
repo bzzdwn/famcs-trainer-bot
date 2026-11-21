@@ -13,7 +13,7 @@ DIFFICULTIES = {"A", "B", "C"}
 DEFAULT_DOMAIN = (-3.0, 3.0)
 
 TOP_KEYS = {"id", "topic", "source", "difficulty", "var", "params", "constraints",
-            "integrand", "statement", "checkpoints", "blitz_method", "method_alternatives"}
+            "integrand", "statement", "checkpoints", "blitz_method", "method_alternatives", "examples"}
 TOP_REQUIRED = {"id", "topic", "difficulty", "var", "integrand", "checkpoints"}
 CP_KEYS = {"type", "prompt", "hint", "var", "options", "correct", "expected", "substitution",
            "same_as", "distractors", "skippable", "reference", "domain"}
@@ -67,6 +67,14 @@ class Checkpoint:
 
 
 @dataclass(frozen=True)
+class Example:
+    """Номер из задачника: при этих параметрах шаблон даёт ровно его; answer — ответ из книги (синтаксис sympy)."""
+    number: str
+    params: dict
+    answer: str
+
+
+@dataclass(frozen=True)
 class Template:
     id: str
     topic: str
@@ -80,6 +88,7 @@ class Template:
     statement: str | None = None       # LaTeX; None → sympy.latex(Integral(integrand))
     blitz_method: str | None = None
     method_alternatives: tuple[str, ...] = ()   # тоже рабочие методы: «Сработает, но можно короче»
+    examples: tuple[Example, ...] = ()           # сверка с задачником (tests/test_bank.py)
     file: str = field(default="", compare=False)
 
 
@@ -244,11 +253,28 @@ def parse_template(raw: dict, source: str = "<dict>") -> Template:
     if raw.get("blitz_method") in alts:
         fail("method_alternatives дублирует blitz_method")
 
+    examples = []
+    raw_ex = raw.get("examples", [])
+    if not isinstance(raw_ex, list):
+        fail("examples: ожидался список")
+    for k, ex in enumerate(raw_ex):
+        where = f"examples[{k}]"
+        if not isinstance(ex, dict) or set(ex) != {"number", "params", "answer"}:
+            fail(f"{where}: нужны ровно ключи number, params, answer")
+        p = ex["params"]
+        if not isinstance(p, dict) or set(p) != names:
+            fail(f"{where}: params должны задавать ровно {sorted(names)}")
+        if not all(_is_int(v) for v in p.values()):
+            fail(f"{where}: значения параметров — целые числа")
+        _check_formula(ex["answer"], {var}, f"{where}.answer", fail)
+        examples.append(Example(str(ex["number"]), dict(p), ex["answer"]))
+
     return Template(
         id=str(raw["id"]), topic=str(raw["topic"]), source=str(raw.get("source", "")),
         difficulty=raw["difficulty"], var=var, params=params, integrand=raw["integrand"],
         checkpoints=cps, constraints=constraints, statement=raw.get("statement"),
-        blitz_method=raw.get("blitz_method"), method_alternatives=tuple(alts), file=source,
+        blitz_method=raw.get("blitz_method"), method_alternatives=tuple(alts), examples=tuple(examples),
+        file=source,
     )
 
 
