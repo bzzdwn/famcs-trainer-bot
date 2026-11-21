@@ -1,4 +1,4 @@
-"""Команды преподавателя: /students, /rename, /kick, /reload, /ocrdump. Доступны только ADMIN_TG_ID."""
+"""Команды преподавателя: /students, /rename, /kick, /reload, /export, /ocrdump. Доступны только ADMIN_TG_ID."""
 import asyncio
 import logging
 from datetime import datetime
@@ -13,6 +13,7 @@ from bot import commands
 from bot.bank import reload_bank
 from bot.config import Settings
 from bot.db import DB, DuplicateStudent
+from bot.export import build_xlsx, collect
 from bot.ocrdump import build_ocr_dump
 from bot.waiting import waiting
 from bot.registration import InvalidName, normalize_name
@@ -68,6 +69,15 @@ def make_router(admin_tg_id: int) -> Router:
         await message.answer("Перечитываю шаблоны…")
         ok, msg = await asyncio.to_thread(reload_bank, bank, settings.templates_dir)
         await message.answer(("✅ " if ok else "❌ Банк не изменён.\n") + escape(msg))
+
+    @router.message(Command("export"))
+    async def cmd_export(message: Message, db: DB, bank: dict):
+        async with waiting(message, "Собираю отчёт…"):
+            data = await collect(db, bank)
+            xlsx = await asyncio.to_thread(build_xlsx, data)
+        await message.answer_document(
+            BufferedInputFile(xlsx, f"export_{datetime.now():%Y%m%d_%H%M}.xlsx"),
+            caption=f"Студентов: {len(data.students)}. Листы: Студенты, Шаблоны, Блиц, Вразнобой")
 
     @router.message(Command("ocrdump"))
     async def cmd_ocrdump(message: Message, command: CommandObject, db: DB):
