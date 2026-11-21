@@ -1,4 +1,5 @@
 """Проверка ответов: символьно, при неудаче — численно. Без LLM."""
+import multiprocessing
 import random
 from concurrent.futures import TimeoutError as FutureTimeout
 from dataclasses import dataclass
@@ -197,7 +198,8 @@ def _warmup() -> None:
 def _get_pool() -> ProcessPool:
     global _pool
     if _pool is None or not _pool.active:
-        _pool = ProcessPool(max_workers=2, initializer=_warmup)
+        # spawn, а не fork (дефолт Linux): fork многопоточного процесса бота может повесить воркер
+        _pool = ProcessPool(max_workers=2, initializer=_warmup, context=multiprocessing.get_context("spawn"))
     return _pool
 
 

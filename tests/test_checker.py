@@ -185,3 +185,11 @@ def test_total_timeout_and_recovery():
 
 def test_with_timeout_transformed_integrand():
     assert check_with_timeout("transformed_integrand", "2/(8+2t^2)", "1/(4+t**2)", var="t").status == OK
+
+
+def test_pool_uses_spawn():
+    # fork многопоточного процесса (Linux по умолчанию) может повесить воркер — только spawn
+    from core.checker import _get_pool
+    wm = _get_pool()._pool_manager.worker_manager          # внутренности pebble 5.x
+    ctx = next(v for v in vars(wm).values() if hasattr(v, "get_start_method"))
+    assert ctx.get_start_method() == "spawn"
