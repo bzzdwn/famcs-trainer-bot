@@ -52,8 +52,12 @@ def _ev(src: str, params: dict[str, int], var: str | None = None, real: bool = F
         loc[var] = sp.Symbol(var, real=True) if real else sp.Symbol(var)
     e = sp.sympify(src, locals=loc)
     if isinstance(e, sp.Basic) and e.has(sp.Integral):
-        e = e.doit().replace(lambda z: isinstance(z, sp.log) and not isinstance(z.args[0], sp.Abs),
-                             lambda z: sp.log(sp.Abs(z.args[0])))
+        # интегрируем при вещественном x: иначе ln|eˣ| → re(x); потом возвращаем исходный символ
+        swap = {loc[var]: sp.Symbol(var, real=True)} if var and not real else {}
+        e = e.xreplace(swap).doit().replace(
+            lambda z: isinstance(z, sp.log) and not isinstance(z.args[0], sp.Abs),
+            lambda z: sp.log(sp.Abs(z.args[0])))
+        e = e.xreplace({v: k for k, v in swap.items()})
     return e
 
 

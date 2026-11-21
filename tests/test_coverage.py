@@ -12,7 +12,7 @@ COV = yaml.safe_load((ROOT / "data" / "demidovich.yaml").read_text(encoding="utf
 
 def test_format():
     for num, e in COV.items():
-        assert isinstance(num, int) and 1628 <= num <= 2180, num            # отдел III
+        assert isinstance(num, (int, float)) and 1628 <= num <= 2180, num            # отдел III
         assert e["status"] in ("covered", "skip"), num
         if e["status"] == "covered":
             assert e.get("template") in BANK, f"{num}: нет шаблона {e.get('template')}"
@@ -23,5 +23,5 @@ def test_format():
 def test_every_example_is_marked_covered():
     for tid, tpl in BANK.items():
         for ex in tpl.examples:
-            e = COV.get(int(ex.number))
+            e = COV.get(float(ex.number))   # 1628 == 1628.0; 2043.1 — float-ключ
             assert e and e["status"] == "covered" and e["template"] == tid, f"{tid}: № {ex.number} не отмечен"

@@ -227,6 +227,15 @@ def test_integral_reference_log_gets_abs():
     self_check(t, {"a": 3, "s": 1, "k": 1})
 
 
+def test_subs_integral_reference_real_var():
+    # Subs(Integral(R(t), t), t, g(x)): ln|eˣ| должен стать x, а не re(x) (x вещественный)
+    t = integral_template("1/(a + exp(x))", "Subs(Integral(1/(t*(a + t)), t), t, exp(x))", [-2.0, 2.0])
+    ref = build(t, {"a": 1, "s": 1, "k": 1}).checkpoints[0].reference
+    assert "re(" not in ref and "im(" not in ref
+    assert parse_trusted(ref) == parse_trusted("x - log(exp(x) + 1)")
+    self_check(t, {"a": 1, "s": 1, "k": 1})
+
+
 def test_integral_reference_validation_is_lazy():
     import time
     t0 = time.monotonic()                                               # при загрузке с символьными параметрами

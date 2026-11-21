@@ -15,3 +15,36 @@
 1639: {status: covered, template: int_int_part_01}
 1640: {status: covered, template: int_int_part_01}
 1641: {status: covered, template: int_int_part_01}
+1997: {status: covered, template: int_trig_odd_rational_01}
+1998: {status: covered, template: int_trig_odd_rational_01}
+1999: {status: covered, template: int_trig_odd_rational_01}
+2000: {status: covered, template: int_trig_odd_rational_01}
+2001: {status: covered, template: int_trig_tan_even_01}
+2002: {status: covered, template: int_trig_tan_even_01}
+2003: {status: covered, template: int_trig_odd_rational_01}
+2004: {status: covered, template: int_tan_power_01}
+2005: {status: covered, template: int_tan_power_01}
+2006: {status: covered, template: int_trig_tan_even_01}
+2007: {status: covered, template: int_trig_sqrt_tan_01}
+2008: {status: covered, template: int_trig_root_sin_01}
+2009: {status: covered, template: int_trig_root_tan_01}
+2010: {status: covered, template: int_trig_root_tan_01}
+2041: {status: covered, template: int_trig_aux_angle_01}
+2042: {status: skip, reason: "доказательство (метод — в int_trig_lin_ratio_01)"}
+2043: {status: covered, template: int_trig_lin_ratio_01}
+2043.1: {status: covered, template: int_trig_lin_ratio_01}
+2044: {status: covered, template: int_trig_lin_ratio_01}
+2045: {status: covered, template: int_trig_lin_ratio_sq_01}
+2046: {status: skip, reason: "доказательство (метод — в int_trig_lin_ratio_c_01)"}
+2047: {status: covered, template: int_trig_lin_ratio_c_01}
+2048: {status: skip, reason: "c = √2 и вырожденный случай c² = a² + b²; параметры целые"}
+2049: {status: covered, template: int_trig_lin_ratio_c_01}
+2082: {status: covered, template: int_exp_rational_01}
+2083: {status: covered, template: int_exp_rational_01}
+2084: {status: covered, template: int_exp_rational_01}
+2085: {status: covered, template: int_exp_lcm_01}
+2086: {status: covered, template: int_exp_lcm_02}
+2087: {status: covered, template: int_exp_sqrt_01}
+2088: {status: skip, reason: "разовый трюк, не обобщается"}
+2089: {status: skip, reason: "подстановка Эйлера под e^x, разовая"}
+2090: {status: skip, reason: "рационализация суммы корней, разовая"}

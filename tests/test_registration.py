@@ -49,18 +49,17 @@ def test_available():
     av = available(BANK)
     assert list(av) == [t for t in TOPIC_NAMES if t in av]          # порядок как в меню
     assert set(av) == set(TOPIC_NAMES)                               # у каждой темы меню есть шаблоны
-    assert av["indef_integral.trig"] == ["A", "B"]
-    assert av["indef_integral.parts"] == ["A", "B"]
-    assert av["indef_integral.irrational"] == ["B", "C"]
+    for topic, levels in av.items():                                 # уровни — ровно те, что есть в банке
+        assert levels == sorted({t.difficulty for t in BANK.values() if t.topic == topic})
     assert all(levels for levels in av.values())
 
 
 def test_pick_template():
     rng = random.Random(0)
     t = pick_template(BANK, "indef_integral.trig", "B", rng)
-    assert t.id in {"int_trig_universal_01", "int_trig_tan_01"}
+    assert (t.topic, t.difficulty) == ("indef_integral.trig", "B")
     assert pick_template(BANK, "indef_integral.parts", "C", rng) is None
-    assert pick_template(BANK, "indef_integral.irrational", "C", rng).id == "int_binomial_01"
+    assert pick_template(BANK, "indef_integral.irrational", "C", rng).difficulty == "C"
     assert pick_template(BANK, "nope", "A", rng) is None
 
 
@@ -101,7 +100,8 @@ def test_no_immediate_repeat():
 
 
 def test_exclude_ignored_when_single_candidate():
-    t = pick_template(BANK, MIX, "C", random.Random(0), exclude="int_binomial_01")
+    one = {"int_binomial_01": BANK["int_binomial_01"]}             # банк с единственным C
+    t = pick_template(one, MIX, "C", random.Random(0), exclude="int_binomial_01")
     assert t.id == "int_binomial_01"                               # другого C нет — повтор лучше, чем ничего
 
 
@@ -111,8 +111,9 @@ def test_mix_no_templates():
 
 def test_exclude_in_topic_mode():
     rng = random.Random(0)
-    ids = {pick_template(BANK, "indef_integral.trig", "B", rng, exclude="int_trig_tan_01").id for _ in range(20)}
-    assert ids == {"int_trig_universal_01"}
+    ids = {pick_template(BANK, "indef_integral.trig", "B", rng, exclude="int_trig_tan_01").id for _ in range(50)}
+    assert "int_trig_tan_01" not in ids
+    assert ids <= {t.id for t in BANK.values() if t.topic == "indef_integral.trig" and t.difficulty == "B"}
 
 
 # --- все методы для «Вразнобой» ---------------------------------------------

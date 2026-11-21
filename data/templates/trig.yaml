@@ -25,7 +25,7 @@
     - type: antiderivative
       prompt: "Ответ (с +C)"
       reference: "(-cos(a*x)**(n + 1)/(n + 1) + cos(a*x)**(n + 3)/(n + 3))/a"
-  blitz_method: "замена t = cos x (sin в нечётной степени)"
+  blitz_method: "замена t = cos x / sin x (нечётная степень)"
   method_alternatives: ["универсальная замена"]
 
 - id: int_trig_universal_01
@@ -119,3 +119,380 @@
       domain: [-1.4, 1.4]
   blitz_method: "замена t = tg x"
   method_alternatives: ["универсальная замена"]
+
+# --- Демидович, отдел III, § 4, № 1997–2010: sinᵐ·cosⁿ, tgⁿ, корни из tg/sin ---
+
+- id: int_trig_odd_rational_01
+  topic: indef_integral.trig
+  source: "Демидович, № 1997–2000, 2003"
+  difficulty: B
+  var: x
+  params:
+    m: {choice: [-3, -1, 1, 3]}           # нечётная степень
+    n: {choice: [-4, -2, 0, 2, 4]}        # чётная степень
+    w: {choice: [0, 1]}                   # 0: sinᵐ·cosⁿ, 1: cosᵐ·sinⁿ
+  constraints: ["m < 0 or n < 0", "Abs(m) + Abs(n) <= 7"]
+  integrand: "sin(x + w*pi/2)**m*cos(x + w*pi/2)**n"   # при w = 1 sympy сам даёт cosᵐ·sinⁿ (n чётное)
+  checkpoints:
+    - type: choice
+      prompt: "Какую замену применишь?"
+      options: ["t = функция в чётной степени", "t = функция в нечётной степени", "t = tg x", "t = tg(x/2)"]
+      correct: ["t = функция в чётной степени"]
+      hint: "Одна из функций в нечётной степени: отщепи её первую степень под дифференциал, остальное вырази через другую (sin² = 1 − cos²)."
+    - type: transformed_integrand
+      prompt: "Запиши подынтегральную функцию после замены (по t)"
+      var: t
+      substitution: "cos(x)*(1 - w) + sin(x)*w"
+      expected: "(-1)**(1 - w)*(1 - t**2)**((m - 1)/2)*t**n"
+      distractors:
+        - "(-1)**(1 - w)*(1 + t**2)**((m - 1)/2)*t**n"     # sin² = 1 + cos²
+        - "(-1)**(1 - w)*(1 - t**2)**((m + 1)/2)*t**n"     # не отщепил первую степень под d(·)
+      skippable: true
+      hint: "t = cos x: dt = −sin x dx, sin²x = 1 − t² (для t = sin x: dt = cos x dx)."
+    - type: antiderivative
+      prompt: "Ответ (с +C)"
+      reference: "Subs(Integral((-1)**(1 - w)*(1 - t**2)**((m - 1)/2)*t**n, t), t, cos(x)*(1 - w) + sin(x)*w)"
+      domain: [0.1, 1.4]
+  blitz_method: "замена t = cos x / sin x (нечётная степень)"
+  method_alternatives: ["универсальная замена"]
+  examples:
+    - {number: 1997, params: {m: 3, n: -4, w: 0}, answer: "1/(3*cos(x)**3) - 1/cos(x)"}
+    - {number: 1998, params: {m: -3, n: 4, w: 0},       # в книге −3/2·cos x — опечатка, верно −cos x
+       answer: "-cos(x) - cos(x)/(2*sin(x)**2) - 3*log(Abs(tan(x/2)))/2"}
+    - {number: 1999, params: {m: -3, n: 0, w: 0}, answer: "-cos(x)/(2*sin(x)**2) + log(Abs(tan(x/2)))/2"}
+    - {number: 2000, params: {m: -3, n: 0, w: 1}, answer: "sin(x)/(2*cos(x)**2) + log(Abs(tan(x/2 + pi/4)))/2"}
+    - {number: 2003, params: {m: -1, n: -4, w: 0}, answer: "1/cos(x) + 1/(3*cos(x)**3) + log(Abs(tan(x/2)))"}
+
+- id: int_trig_tan_even_01
+  topic: indef_integral.trig
+  source: "Демидович, № 2001, 2002, 2006"
+  difficulty: B
+  var: x
+  params:
+    m: {int: [-5, 4]}
+    n: {int: [-8, 0]}
+  constraints: ["Mod(m + n, 2) == 0", "m + n <= -2", "m + n >= -8"]
+  integrand: "sin(x)**m*cos(x)**n"
+  checkpoints:
+    - type: choice
+      prompt: "Какую замену применишь?"
+      options: ["t = tg x", "t = cos x", "t = sin x", "t = tg(x/2)"]
+      correct: ["t = tg x"]
+      hint: "m + n чётно: R(−sin, −cos) = R(sin, cos) → t = tg x; sinᵐcosⁿ = tgᵐ·cos^(m+n)."
+    - type: transformed_integrand
+      prompt: "Запиши подынтегральную функцию после замены (по t)"
+      var: t
+      substitution: "tan(x)"
+      expected: "t**m*(1 + t**2)**(-(m + n)/2 - 1)"
+      distractors:
+        - "t**m*(1 + t**2)**(-(m + n)/2)"        # забыл dx = dt/(1 + t²)
+        - "t**m*(1 + t**2)**((m + n)/2 + 1)"     # знак показателя
+        - "t**n*(1 + t**2)**(-(m + n)/2 - 1)"    # перепутал sin и cos
+      skippable: true
+      hint: "cos²x = 1/(1 + t²), sin x = t·cos x, dx = dt/(1 + t²)."
+    - type: antiderivative
+      prompt: "Ответ (с +C)"
+      reference: "Subs(Integral(expand(t**m*(1 + t**2)**(-(m + n)/2 - 1)), t), t, tan(x))"
+      domain: [0.1, 1.4]
+  blitz_method: "замена t = tg x"
+  examples:
+    - {number: 2001, params: {m: -4, n: -4}, answer: "-8*cot(2*x) - 8*cot(2*x)**3/3"}
+    - {number: 2002, params: {m: -3, n: -5},
+       answer: "tan(x)**4/4 + 3*tan(x)**2/2 - cot(x)**2/2 + 3*log(Abs(tan(x)))"}
+    - {number: 2006, params: {m: 4, n: -6}, answer: "tan(x)**5/5"}
+
+- id: int_tan_power_01
+  topic: indef_integral.trig
+  source: "Демидович, № 2004, 2005"
+  difficulty: B
+  var: x
+  params:
+    n: {int: [2, 6]}
+    c: {choice: [0, 1]}     # 0: tgⁿ, 1: ctgⁿ
+  integrand: "(tan(x)*(1 - c) + cot(x)*c)**n"
+  checkpoints:
+    - type: choice
+      prompt: "Какую замену применишь?"
+      options: ["t = tg x (для ctg — t = ctg x)", "t = sin x", "t = tg(x/2)", "по частям"]
+      correct: ["t = tg x (для ctg — t = ctg x)"]
+      hint: "dx = dt/(1 + t²) (для ctg — минус): получится tⁿ/(1 + t²), раздели с остатком. Или понижай: tg²x = 1/cos²x − 1."
+    - type: transformed_integrand
+      prompt: "Запиши подынтегральную функцию после замены (по t)"
+      var: t
+      substitution: "tan(x)*(1 - c) + cot(x)*c"
+      expected: "(-1)**c*t**n/(1 + t**2)"
+      distractors:
+        - "(-1)**c*t**n"                 # забыл dx = dt/(1 + t²)
+        - "(-1)**c*t**n/(1 - t**2)"      # знак в 1 + t²
+      skippable: true
+      hint: "d(tg x) = (1 + tg²x) dx, d(ctg x) = −(1 + ctg²x) dx."
+    - type: antiderivative
+      prompt: "Ответ (с +C)"
+      # без atan(tg x): остаток от деления tⁿ на t² + 1 проинтегрирован явно
+      reference: "(-1)**c*Subs(Integral(quo(t**n, t**2 + 1), t), t, tan(x)*(1 - c) + cot(x)*c)
+        + (1 - Mod(n, 2))*(-1)**(n/2)*x
+        + Mod(n, 2)*(-1)**((n - 1)/2)*(c*log(Abs(sin(x))) - (1 - c)*log(Abs(cos(x))))"
+      domain: [0.1, 1.4]
+  blitz_method: "замена t = tg x"
+  examples:
+    - {number: 2004, params: {n: 5, c: 0}, answer: "tan(x)**4/4 - tan(x)**2/2 - log(Abs(cos(x)))"}
+    - {number: 2005, params: {n: 6, c: 1}, answer: "-x - cot(x)**5/5 + cot(x)**3/3 - cot(x)"}
+
+- id: int_trig_sqrt_tan_01
+  topic: indef_integral.trig
+  source: "Демидович, № 2007"
+  difficulty: B
+  var: x
+  params:
+    m: {choice: [1, 3, 5, 7]}
+    k: {choice: [1, 2]}        # m + n = 4k
+  constraints: ["m < 4*k"]
+  integrand: "1/sqrt(sin(x)**m*cos(x)**(4*k - m))"
+  checkpoints:
+    - type: choice
+      prompt: "Какую замену применишь?"
+      options: ["t = tg x", "t = sin x", "t = cos x", "t = tg(x/2)"]
+      correct: ["t = tg x"]
+      hint: "Сумма степеней под корнем 4k: sinᵐcosⁿ = tgᵐ·cos^(4k), корень извлекается из cos."
+    - type: transformed_integrand
+      prompt: "Запиши подынтегральную функцию после замены (по t)"
+      var: t
+      substitution: "tan(x)"
+      expected: "t**(-m/2)*(1 + t**2)**(k - 1)"
+      domain: [0.2, 3.0]                      # t = tg x > 0: корни из t вещественны
+      distractors:
+        - "t**(-m/2)*(1 + t**2)**k"         # забыл dx = dt/(1 + t²)
+        - "t**(m/2)*(1 + t**2)**(k - 1)"    # знак показателя у t
+        - "t**(-m)*(1 + t**2)**(k - 1)"     # потерял корень
+      skippable: true
+      hint: "√(sinᵐcosⁿ) = t^(m/2)·cos^(2k)x = t^(m/2)/(1 + t²)ᵏ, dx = dt/(1 + t²)."
+    - type: antiderivative
+      prompt: "Ответ (с +C)"
+      reference: "Subs(Integral(expand(t**(-m/2)*(1 + t**2)**(k - 1)), t), t, tan(x))"
+      domain: [0.1, 1.4]
+  blitz_method: "замена t = tg x"
+  examples:
+    - {number: 2007, params: {m: 3, k: 2}, answer: "-2*sqrt(cot(x)) + 2*sqrt(tan(x)**3)/3"}
+
+- id: int_trig_root_sin_01
+  topic: indef_integral.trig
+  source: "Демидович, № 2008"
+  difficulty: C
+  var: x
+  params:
+    r: {choice: [2, 3]}
+    k: {choice: [1, 2]}
+  constraints: ["k < r"]
+  integrand: "1/(cos(x)*sin(x)**(k/r))"
+  checkpoints:
+    - type: choice
+      prompt: "Какая замена сразу даёт рациональную функцию?"
+      options: ["t = ʳ√(sin x)", "t = sin x", "t = cos x", "t = tg x"]
+      correct: ["t = ʳ√(sin x)"]
+      hint: "Домножь на cos x: cos x dx = d(sin x), cos²x = 1 − sin²x; корень из sin x убирает замена t = ʳ√(sin x)."
+    - type: transformed_integrand
+      prompt: "Запиши подынтегральную функцию после замены (по t)"
+      var: t
+      substitution: "sin(x)**(1/r)"
+      expected: "r*t**(r - k - 1)/(1 - t**(2*r))"
+      distractors:
+        - "t**(r - k - 1)/(1 - t**(2*r))"        # потерял r из d(tʳ)
+        - "r*t**(r - k - 1)/(1 - t**r)"          # cos² = 1 − sin, а не 1 − sin²
+        - "r*t**(r - k - 1)/(1 + t**(2*r))"      # cos² = 1 + sin²
+      skippable: true
+      hint: "sin x = tʳ, cos x dx = r·t^(r−1) dt, cos²x = 1 − t^(2r)."
+    - type: antiderivative
+      prompt: "Ответ (с +C)"
+      reference: "Subs(Integral(r*t**(r - k - 1)/(1 - t**(2*r)), t), t, sin(x)**(1/r))"
+      domain: [0.1, 1.4]
+  blitz_method: "замена-корень t = ⁿ√(…)"
+  examples:
+    - {number: 2008, params: {r: 3, k: 2},     # в книге (1 + t³) и (1 − t³) под ln переставлены — опечатка
+       answer: "log(Abs((1 + sin(x)**(1/3))**3*(1 - sin(x))/((1 - sin(x)**(1/3))**3*(1 + sin(x)))))/4
+         - sqrt(3)/2*atan((1 - sin(x)**(2/3))/(sin(x)**(1/3)*sqrt(3)))"}
+
+- id: int_trig_root_tan_01
+  topic: indef_integral.trig
+  source: "Демидович, № 2009, 2010"
+  difficulty: C
+  var: x
+  params:
+    r: {choice: [2, 3]}
+    s: {choice: [1, -1]}
+  integrand: "tan(x)**(s/r)"
+  checkpoints:
+    - type: choice
+      prompt: "Какая замена сразу даёт рациональную функцию?"
+      options: ["z = ʳ√(tg x)", "t = tg x", "t = tg(x/2)", "t = sin x"]
+      correct: ["z = ʳ√(tg x)"]
+      hint: "tg x = zʳ, x = arctg zʳ, dx = r·z^(r−1) dz/(1 + z^(2r))."
+    - type: transformed_integrand
+      prompt: "Запиши подынтегральную функцию после замены (по z)"
+      var: z
+      substitution: "tan(x)**(1/r)"
+      expected: "r*z**(r + s - 1)/(1 + z**(2*r))"
+      distractors:
+        - "z**(r + s - 1)/(1 + z**(2*r))"      # потерял r
+        - "r*z**(r + s - 1)/(1 + z**r)"        # 1 + tg² = 1 + zʳ
+        - "r*z**(r + s)/(1 + z**(2*r))"        # ошибка в степени при сокращении
+      skippable: true
+      hint: "dx = d(arctg zʳ) = r·z^(r−1) dz/(1 + z^(2r))."
+    - type: antiderivative
+      prompt: "Ответ (с +C)"
+      reference: "Subs(Integral(r*t**(r + s - 1)/(1 + t**(2*r)), t), t, tan(x)**(1/r))"
+      domain: [0.1, 1.4]
+  blitz_method: "замена-корень t = ⁿ√(…)"
+  examples:
+    - {number: 2009, params: {r: 2, s: -1},
+       answer: "log((tan(x) + sqrt(2*tan(x)) + 1)/(tan(x) - sqrt(2*tan(x)) + 1))/(2*sqrt(2))
+         - atan(sqrt(2*tan(x))/(tan(x) - 1))/sqrt(2)"}
+    - {number: 2010, params: {r: 3, s: -1},
+       answer: "log((tan(x)**(2/3) + 1)**2/(tan(x)**(4/3) - tan(x)**(2/3) + 1))/4
+         + sqrt(3)/2*atan((2*tan(x)**(2/3) - 1)/sqrt(3))"}
+
+# --- Демидович, № 2041–2049: a·sin x + b·cos x (+ c) ---
+
+- id: int_trig_aux_angle_01
+  topic: indef_integral.trig
+  source: "Демидович, № 2041"
+  difficulty: B
+  var: x
+  params:
+    a: {int: [1, 4]}
+    b: {int: [-4, 4], exclude: [0]}
+  integrand: "1/(a*sin(x) + b*cos(x))"
+  checkpoints:
+    - type: choice
+      prompt: "Как преобразовать знаменатель?"
+      options: ["a sin x + b cos x = √(a² + b²)·sin(x + φ)", "a sin x + b cos x = (a + b)·sin(x + φ)",
+                "разложить на простые дроби", "t = tg x"]
+      correct: ["a sin x + b cos x = √(a² + b²)·sin(x + φ)"]
+      hint: "Вспомогательный угол: cos φ = a/√(a² + b²), sin φ = b/√(a² + b²); ∫dx/sin u = ln|tg(u/2)|."
+    - type: antiderivative
+      prompt: "Ответ (с +C)"
+      reference: "log(Abs(tan((x + atan(b/a))/2)))/sqrt(a**2 + b**2)"
+      domain: ["-atan(b/a) + 0.2", "-atan(b/a) + 2.9"]
+  blitz_method: "вспомогательный угол"
+  method_alternatives: ["универсальная замена"]
+  examples:   # в книге a, b общие; здесь a = 1, b = 1
+    - {number: 2041, params: {a: 1, b: 1}, answer: "log(Abs(tan((x + pi/4)/2)))/sqrt(2)"}
+
+- id: int_trig_lin_ratio_01
+  topic: indef_integral.trig
+  source: "Демидович, № 2042–2044"
+  difficulty: B
+  var: x
+  params:
+    a1: {int: [-3, 3]}
+    b1: {int: [-3, 3]}
+    a: {int: [1, 5]}
+    b: {int: [-5, 5], exclude: [0]}
+  constraints: ["a1 != 0 or b1 != 0", "a*b1 - a1*b != 0"]
+  integrand: "(a1*sin(x) + b1*cos(x))/(a*sin(x) + b*cos(x))"
+  checkpoints:
+    - type: expr
+      prompt: "Числитель = A·знаменатель + B·(знаменатель)′. Запиши подынтегральную функцию в виде A + B·D′/D"
+      expected: "(a1*a + b1*b)/(a**2 + b**2) + (a*b1 - a1*b)/(a**2 + b**2)*(a*cos(x) - b*sin(x))/(a*sin(x) + b*cos(x))"
+      same_as: integrand
+      domain: ["-atan(b/a) + 0.2", "-atan(b/a) + 2.9"]
+      distractors:
+        - "(a*b1 - a1*b)/(a**2 + b**2) + (a1*a + b1*b)/(a**2 + b**2)*(a*cos(x) - b*sin(x))/(a*sin(x) + b*cos(x))"   # A и B перепутаны
+        - "(a1*a + b1*b)/(a**2 + b**2) - (a*b1 - a1*b)/(a**2 + b**2)*(a*cos(x) - b*sin(x))/(a*sin(x) + b*cos(x))"   # знак B
+        - "(a1*a + b1*b) + (a*b1 - a1*b)*(a*cos(x) - b*sin(x))/(a*sin(x) + b*cos(x))"                               # забыл поделить на a² + b²
+      hint: "Сравни коэффициенты при sin и cos: Aa − Bb = a₁, Ab + Ba = b₁."
+    - type: antiderivative
+      prompt: "Ответ (с +C)"
+      reference: "(a1*a + b1*b)/(a**2 + b**2)*x + (a*b1 - a1*b)/(a**2 + b**2)*log(Abs(a*sin(x) + b*cos(x)))"
+      domain: ["-atan(b/a) + 0.2", "-atan(b/a) + 2.9"]
+  blitz_method: "числитель = A·знам + B·знам′"
+  examples:
+    - {number: 2043, params: {a1: 1, b1: -1, a: 1, b: 2}, answer: "-x/5 - 3*log(Abs(sin(x) + 2*cos(x)))/5"}
+    - {number: 2043.1, params: {a1: 1, b1: 0, a: 1, b: -3}, answer: "x/10 + 3*log(Abs(sin(x) - 3*cos(x)))/10"}
+    - {number: 2044, params: {a1: 0, b1: 1, a: 5, b: 3},       # 1/(3 + 5 tg x) = cos x/(5 sin x + 3 cos x)
+       answer: "3*x/34 + 5*log(Abs(5*sin(x) + 3*cos(x)))/34"}
+
+- id: int_trig_lin_ratio_sq_01
+  topic: indef_integral.trig
+  source: "Демидович, № 2045"
+  difficulty: C
+  var: x
+  params:
+    a1: {int: [-3, 3]}
+    b1: {int: [-3, 3]}
+    a: {int: [1, 4]}
+    b: {int: [-4, 4], exclude: [0]}
+  constraints: ["a*a1 + b*b1 != 0", "a*b1 - a1*b != 0"]
+  integrand: "(a1*sin(x) + b1*cos(x))/(a*sin(x) + b*cos(x))**2"
+  checkpoints:
+    - type: expr
+      prompt: "Числитель = A·D + B·D′ (D — основание квадрата). Запиши подынтегральную функцию в виде A/D + B·D′/D²"
+      expected: "(a*a1 + b*b1)/(a**2 + b**2)/(a*sin(x) + b*cos(x)) + (a*b1 - a1*b)/(a**2 + b**2)*(a*cos(x) - b*sin(x))/(a*sin(x) + b*cos(x))**2"
+      same_as: integrand
+      domain: ["-atan(b/a) + 0.2", "-atan(b/a) + 2.9"]
+      distractors:
+        - "(a*b1 - a1*b)/(a**2 + b**2)/(a*sin(x) + b*cos(x)) + (a*a1 + b*b1)/(a**2 + b**2)*(a*cos(x) - b*sin(x))/(a*sin(x) + b*cos(x))**2"   # A и B перепутаны
+        - "(a*a1 + b*b1)/(a**2 + b**2)/(a*sin(x) + b*cos(x)) - (a*b1 - a1*b)/(a**2 + b**2)*(a*cos(x) - b*sin(x))/(a*sin(x) + b*cos(x))**2"   # знак B
+      hint: "Как в № 2042: Aa − Bb = a₁, Ab + Ba = b₁. Потом ∫D′/D² = −1/D, а ∫dx/D — вспомогательный угол."
+    - type: antiderivative
+      prompt: "Ответ (с +C)"
+      reference: "-(a*b1 - a1*b)/(a**2 + b**2)/(a*sin(x) + b*cos(x))
+        + (a*a1 + b*b1)/(a**2 + b**2)**(3/2)*log(Abs(tan((x + atan(b/a))/2)))"
+      domain: ["-atan(b/a) + 0.2", "-atan(b/a) + 2.9"]
+  blitz_method: "числитель = A·знам + B·знам′"
+  examples:   # в книге общие коэффициенты (и опечатка a₁ в знаменателе); здесь формула ответа на числах
+    - {number: 2045, params: {a1: 1, b1: 2, a: 3, b: 4},
+       answer: "-(3*2 - 1*4)/25/(3*sin(x) + 4*cos(x)) + (3*1 + 4*2)/125*log(Abs(tan((x + atan(4/3))/2)))"}
+
+- id: int_trig_lin_ratio_c_01
+  topic: indef_integral.trig
+  source: "Демидович, № 2046, 2047, 2049"
+  difficulty: C
+  var: x
+  params:
+    a1: {int: [-3, 3]}
+    b1: {int: [-3, 3]}
+    c1: {int: [-3, 3]}
+    a: {int: [1, 3]}
+    b: {int: [-4, 4], exclude: [0]}
+    c: {int: [-3, 3], exclude: [0]}
+  constraints:
+    - "a1 != 0 or b1 != 0"
+    - "c**2 != a**2 + b**2"
+    - "c**2 < a**2 + b**2 or c > 0"      # иначе D < 0 всюду — тот же случай, не плодим
+    - "c != b"
+    - "c1*(a**2 + b**2) - (a1*a + b1*b)*c != 0"
+  integrand: "(a1*sin(x) + b1*cos(x) + c1)/(a*sin(x) + b*cos(x) + c)"
+  checkpoints:
+    - type: expr
+      prompt: "Числитель = A·D + B·D′ + C. Запиши подынтегральную функцию в виде A + B·D′/D + C/D"
+      expected: "(a1*a + b1*b)/(a**2 + b**2)
+        + (a*b1 - a1*b)/(a**2 + b**2)*(a*cos(x) - b*sin(x))/(a*sin(x) + b*cos(x) + c)
+        + (c1 - (a1*a + b1*b)/(a**2 + b**2)*c)/(a*sin(x) + b*cos(x) + c)"
+      same_as: integrand
+      domain: ["asin(Max(-1, -c/sqrt(a**2 + b**2))) - atan(b/a) + 0.15",
+               "pi - asin(Max(-1, -c/sqrt(a**2 + b**2))) - atan(b/a) - 0.15"]
+      distractors:
+        - "(a1*a + b1*b)/(a**2 + b**2)
+           + (a*b1 - a1*b)/(a**2 + b**2)*(a*cos(x) - b*sin(x))/(a*sin(x) + b*cos(x) + c)
+           + c1/(a*sin(x) + b*cos(x) + c)"                                   # C = c₁ (забыл вычесть A·c)
+        - "(a*b1 - a1*b)/(a**2 + b**2)
+           + (a1*a + b1*b)/(a**2 + b**2)*(a*cos(x) - b*sin(x))/(a*sin(x) + b*cos(x) + c)
+           + (c1 - (a*b1 - a1*b)/(a**2 + b**2)*c)/(a*sin(x) + b*cos(x) + c)"  # A и B перепутаны
+        - "(a1*a + b1*b)/(a**2 + b**2)
+           - (a*b1 - a1*b)/(a**2 + b**2)*(a*cos(x) - b*sin(x))/(a*sin(x) + b*cos(x) + c)
+           + (c1 - (a1*a + b1*b)/(a**2 + b**2)*c)/(a*sin(x) + b*cos(x) + c)"  # знак B
+      hint: "Сравни коэффициенты: при sin — Aa − Bb = a₁, при cos — Ab + Ba = b₁, свободный — Ac + C = c₁."
+    - type: antiderivative
+      prompt: "Ответ (с +C)"
+      reference: "(a1*a + b1*b)/(a**2 + b**2)*x
+        + (a*b1 - a1*b)/(a**2 + b**2)*log(Abs(a*sin(x) + b*cos(x) + c))
+        + (c1 - (a1*a + b1*b)/(a**2 + b**2)*c)*Subs(Integral(2/((c - b)*t**2 + 2*a*t + c + b), t), t, tan(x/2))"
+      domain: ["asin(Max(-1, -c/sqrt(a**2 + b**2))) - atan(b/a) + 0.15",
+               "pi - asin(Max(-1, -c/sqrt(a**2 + b**2))) - atan(b/a) - 0.15"]   # между нулями D
+  blitz_method: "числитель = A·знам + B·знам′"
+  examples:
+    - {number: 2047, params: {a1: 1, b1: 2, c1: -3, a: 1, b: -2, c: 3},
+       answer: "-3*x/5 + 4*log(Abs(sin(x) - 2*cos(x) + 3))/5 - 6*atan((5*tan(x/2) + 1)/2)/5"}
+    - {number: 2049, params: {a1: 2, b1: 1, c1: 0, a: 3, b: 4, c: -2},
+       answer: "2*x/5 - log(Abs(3*sin(x) + 4*cos(x) - 2))/5
+         + 4/(5*sqrt(21))*log(Abs((sqrt(7) + sqrt(3)*(2*tan(x/2) - 1))/(sqrt(7) - sqrt(3)*(2*tan(x/2) - 1))))"}
