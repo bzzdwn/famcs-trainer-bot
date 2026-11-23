@@ -21,6 +21,7 @@ ADMIN_EXTRA = [
     BotCommand(command="export", description="Отчёт XLSX: студенты, шаги, путаница методов"),
     BotCommand(command="reload", description="Перечитать шаблоны"),
     BotCommand(command="preview", description="Примеры шаблона: /preview id [n]"),
+    BotCommand(command="formula", description="Прототип: ввод формулы в редакторе"),
     BotCommand(command="ocrdump", description="Архив распознаваний фото"),
 ]
 

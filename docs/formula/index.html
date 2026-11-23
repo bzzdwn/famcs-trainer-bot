@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>Ввод формулы</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<script src="mathlive.min.js"></script>
+<style>
+  html, body { margin: 0; background: var(--tg-theme-bg-color, #fff); color: var(--tg-theme-text-color, #111);
+               font-family: system-ui, sans-serif; }
+  main { padding: 16px; }
+  p { margin: 0 0 8px; font-size: 14px; color: var(--tg-theme-hint-color, #777); }
+  math-field { display: block; width: 100%; box-sizing: border-box; font-size: 24px; padding: 10px;
+               border: 1px solid var(--tg-theme-hint-color, #bbb); border-radius: 10px;
+               background: var(--tg-theme-secondary-bg-color, #f4f4f5); color: inherit; --caret-color: currentColor; }
+  math-field::part(menu-toggle) { display: none; }
+  #err { min-height: 20px; margin-top: 8px; color: var(--tg-theme-destructive-text-color, #c00); }
+  #send { width: 100%; margin-top: 4px; padding: 12px; font-size: 16px; border: 0; border-radius: 10px;
+          background: var(--tg-theme-button-color, #2481cc); color: var(--tg-theme-button-text-color, #fff); }
+</style>
+</head>
+<body>
+<main>
+  <p>Набери ответ. В первообразной не забудь + C.</p>
+  <math-field id="f" aria-label="Формула"></math-field>
+  <div id="err" role="alert"></div>
+  <button id="send" type="button">Отправить</button>
+</main>
+<script>
+const MAX_BYTES = 4096;                     // предел sendData
+const tg = window.Telegram && window.Telegram.WebApp;
+const f = document.getElementById('f'), err = document.getElementById('err');
+
+MathfieldElement.fontsDirectory = new URL('fonts', location.href).href;
+MathfieldElement.soundsDirectory = null;
+
+customElements.whenDefined('math-field').then(() => {
+  f.smartSuperscript = false;               // иначе x^10 превращается в x¹·0
+  f.smartMode = false;
+  f.menuItems = [];
+  f.mathVirtualKeyboardPolicy = 'auto';     // экранная клавиатура сама открывается на тач-устройствах
+  const fn = (label, tex) => ({ label, insert: tex + '\\left(#0\\right)', class: 'small' });
+  mathVirtualKeyboard.layouts = [
+    { label: '123', rows: [
+      ['x', { latex: '\\frac{#@}{#?}', label: 'a/b' }, { latex: '#@^{#?}', label: 'xⁿ' }, '7', '8', '9', '+', { label: 'eˣ', insert: 'e^{#0}' }],
+      ['t', { latex: '\\sqrt{#0}', label: '√' }, { latex: '\\sqrt[#?]{#0}', label: 'ⁿ√' }, '4', '5', '6', '-', { label: '|x|', insert: '\\left|#0\\right|' }],
+      ['z', '(', ')', '1', '2', '3', { latex: '\\cdot', label: '·' }, fn('ln', '\\ln')],
+      ['[left]', '[right]', { label: '+C', insert: '+C' }, '0', '.', '\\pi', { label: 'AC', command: 'deleteAll', class: 'small' }, '[backspace]'],
+    ]},
+    { label: 'sin', rows: [
+      [fn('sin', '\\sin'), fn('cos', '\\cos'), fn('tg', '\\operatorname{tg}'), fn('ctg', '\\operatorname{ctg}')],
+      [fn('arcsin', '\\arcsin'), fn('arccos', '\\arccos'), fn('arctg', '\\operatorname{arctg}'), fn('arcctg', '\\operatorname{arcctg}')],
+      [fn('sh', '\\operatorname{sh}'), fn('ch', '\\operatorname{ch}'), fn('th', '\\operatorname{th}'), fn('cth', '\\operatorname{cth}')],
+      ['x', { latex: '#@^{2}', label: 'x²' }, '[left]', '[right]', '[backspace]'],
+    ]},
+  ];
+  f.focus();
+});
+
+function send() {
+  const latex = f.getValue('latex');
+  err.textContent = '';
+  if (!latex.trim()) { err.textContent = 'Пусто: набери формулу.'; return; }
+  if (latex.includes('\\placeholder')) { err.textContent = 'Осталась пустая клетка — заполни её или удали.'; return; }
+  const payload = JSON.stringify({ v: 1, latex });
+  if (new TextEncoder().encode(payload).length > MAX_BYTES) { err.textContent = 'Формула слишком длинная.'; return; }
+  if (tg && tg.initDataUnsafe && tg.platform !== 'unknown') tg.sendData(payload);
+  else err.textContent = 'Страница открыта не из бота. ' + payload;
+}
+document.getElementById('send').addEventListener('click', send);
+f.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); send(); } });
+if (tg) { tg.ready(); tg.expand(); }
+</script>
+</body>
+</html>

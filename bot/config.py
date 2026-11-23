@@ -17,6 +17,7 @@ class Settings:
     templates_dir: Path
     yandex_api_key: str | None = None      # без ключей фото-ввод выключен
     yandex_folder_id: str | None = None
+    formula_url: str = "https://bzzdwn.github.io/famcs-trainer-bot/formula/"   # страница docs/formula (GitHub Pages)
 
 
 def load_settings() -> Settings:
@@ -32,4 +33,5 @@ def load_settings() -> Settings:
         templates_dir=ROOT / "data" / "templates",
         yandex_api_key=os.getenv("YANDEX_API_KEY") or None,
         yandex_folder_id=os.getenv("YANDEX_FOLDER_ID") or None,
+        formula_url=os.getenv("FORMULA_URL") or Settings.formula_url,
     )
