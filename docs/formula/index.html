@@ -2,7 +2,7 @@
 <html lang="ru">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
 <title>Ввод формулы</title>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <script src="mathlive.min.js"></script>
@@ -15,6 +15,10 @@
                border: 1px solid var(--tg-theme-hint-color, #bbb); border-radius: 10px;
                background: var(--tg-theme-secondary-bg-color, #f4f4f5); color: inherit; --caret-color: currentColor; }
   math-field::part(menu-toggle) { display: none; }
+  /* клавиатура — сразу под кнопкой, а не у нижнего края: там её закрывает полоска iPhone */
+  #kbd { position: relative; margin-top: 12px; overflow: hidden;
+         margin-bottom: max(12px, env(safe-area-inset-bottom, 0px), var(--tg-safe-area-inset-bottom, 0px)); }
+  #kbd .MLK__backdrop { height: calc(var(--_keyboard-height) + 16px); }   /* MathLive занижает высоту: режет нижний ряд */
   #err { min-height: 20px; margin-top: 8px; color: var(--tg-theme-destructive-text-color, #c00); }
   #send { width: 100%; margin-top: 4px; padding: 12px; font-size: 16px; border: 0; border-radius: 10px;
           background: var(--tg-theme-button-color, #2481cc); color: var(--tg-theme-button-text-color, #fff); }
@@ -27,6 +31,7 @@
   <div id="err" role="alert"></div>
   <button id="send" type="button">Отправить</button>
 </main>
+<div id="kbd"></div>
 <script>
 const MAX_BYTES = 4096;                     // предел sendData
 const tg = window.Telegram && window.Telegram.WebApp;
@@ -55,7 +60,14 @@ customElements.whenDefined('math-field').then(() => {
       ['x', { latex: '#@^{2}', label: 'x²' }, '[left]', '[right]', '[backspace]'],
     ]},
   ];
+  const kbd = document.getElementById('kbd');
+  mathVirtualKeyboard.container = kbd;
+  mathVirtualKeyboard.addEventListener('geometrychange', () => {
+    const h = mathVirtualKeyboard.boundingRect.height;
+    kbd.style.height = h ? (h + 16) + 'px' : '0';       // +16 — как у .MLK__backdrop
+  });
   f.focus();
+  if (matchMedia('(pointer: coarse)').matches) mathVirtualKeyboard.show();   // телефон: сразу открыта
 });
 
 function send() {
