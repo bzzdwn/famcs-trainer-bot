@@ -116,6 +116,25 @@ def test_exclude_in_topic_mode():
     assert ids <= {t.id for t in BANK.values() if t.topic == "indef_integral.trig" and t.difficulty == "B"}
 
 
+# --- § 6 «Разные»: метод не подсказан темой -----------------------------------
+
+MIXED = "indef_integral.mixed"
+
+
+def test_mixed_topic_title():
+    assert topic_title(MIXED) == "Разные"
+
+
+def test_mixed_topic_last_in_menu():
+    assert list(TOPIC_NAMES)[-1] == MIXED
+    assert list(available(BANK))[-1] == MIXED
+
+
+def test_mixed_topic_only_level_c():
+    assert available(BANK)[MIXED] == ["C"]
+    assert all(t.difficulty == "C" for t in BANK.values() if t.topic == MIXED)
+
+
 # --- все методы для «Вразнобой» ---------------------------------------------
 
 from bot.topics import build_method_step, method_options

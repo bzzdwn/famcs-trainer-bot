@@ -14,7 +14,7 @@
   checkpoints:
     - type: choice
       prompt: "Какую замену применишь?"
-      options: ["t = eˣ", "по частям", "t = e^(kx) из числителя", "t = ln x"]
+      options: ["t = eˣ", "по частям", "x = tg t", "t = ln x"]
       correct: ["t = eˣ"]
       hint: "Всё — функции от eˣ: t = eˣ, dx = dt/t, дальше простые дроби."
     - type: transformed_integrand
@@ -45,7 +45,7 @@
   difficulty: B
   var: x
   params:
-    m: {choice: [1, 2, 3, 6]}
+    m: {choice: [2, 3, 6]}
   integrand: "1/(1 + exp(x/m) + exp(2*x/m) + exp(3*x/m))"
   checkpoints:
     - type: choice
@@ -77,7 +77,7 @@
   difficulty: B
   var: x
   params:
-    m: {choice: [1, 2, 3, 4]}
+    m: {choice: [2, 3, 4]}
   integrand: "(1 + exp(2*x/m))/(1 + exp(x/m))**2"
   checkpoints:
     - type: choice

@@ -11,6 +11,7 @@ TOPIC_NAMES = {
     "indef_integral.rational": "Рациональные",
     "indef_integral.irrational": "Иррациональные",
     "indef_integral.trig": "Тригонометрические",
+    "indef_integral.mixed": "Разные",     # Демидович § 6: метод темой не подсказан
 }
 
 

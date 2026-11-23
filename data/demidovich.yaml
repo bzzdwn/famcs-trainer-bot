@@ -48,3 +48,15 @@
 2088: {status: skip, reason: "разовый трюк, не обобщается"}
 2089: {status: skip, reason: "подстановка Эйлера под e^x, разовая"}
 2090: {status: skip, reason: "рационализация суммы корней, разовая"}
+2126: {status: covered, template: mix_rat_xpow_01}
+2127: {status: covered, template: mix_rat_pow_01}
+2128: {status: covered, template: mix_rat_quartic_01}
+2129: {status: covered, template: int_root_lcm_01}
+2130: {status: covered, template: mix_irr_frac_01}
+2131: {status: covered, template: mix_irr_split_01}
+2132: {status: covered, template: mix_irr_power_01}
+2133: {status: covered, template: mix_irr_odd_01}
+2134: {status: covered, template: mix_binom_01}
+2135: {status: covered, template: mix_recip_01}
+2136: {status: covered, template: mix_recip_02}
+2137: {status: covered, template: mix_sin_sub_01}
