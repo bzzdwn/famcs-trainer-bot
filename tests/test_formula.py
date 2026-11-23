@@ -7,7 +7,7 @@ import pytest
 import sympy as sp
 
 from bot.config import Settings
-from bot.formula import MAX_DATA, FormulaError, formula_keyboard, formula_report, parse_webapp_data
+from bot.formula import MAX_DATA, FormulaError, formula_keyboard, parse_webapp_data
 from core.checker import OK, check_antiderivative
 from core.generator import generate
 from core.latex import ru_latex
@@ -150,24 +150,6 @@ def test_default_page_url_is_https():
     assert formula_keyboard(url)
 
 
-# --- отчёт прототипа /formula -----------------------------------------------------
-
-def test_report_ok():
-    text, latex = formula_report(data(r"\frac12xe^{x}+C"))
-    assert r"\frac12xe^{x}+C" in text and "x e^(x)" in text           # что пришло и как перевелось
-    assert latex.endswith("+ C") and "frac" in latex                  # картинка для «так понял»
-
-
-@pytest.mark.parametrize("bad", ["мусор", data(r"\frac{x}{\placeholder{}}"), data("x+y"), data("x+(")])
-def test_report_error_has_no_picture(bad):
-    text, latex = formula_report(bad)
-    assert text.startswith("⚠️") and latex is None
-
-
-def test_report_escapes_html():
-    assert "<b>" not in formula_report(data("x<b>"))[0]
-
-
 # --- страница -------------------------------------------------------------------
 
 def page():
@@ -195,3 +177,12 @@ def test_page_protocol_and_settings():
     assert re.search(r"v:\s*1", html) and "latex" in html
     assert re.search(r"smartSuperscript\s*=\s*false", html)            # иначе x^10 превращается в x¹·0
     assert (ROOT / "docs" / ".nojekyll").exists()                      # Pages отдаёт файлы как есть
+
+
+def test_page_can_restore_last_formula():
+    """«Исправить»: прошлую формулу можно вернуть. Хранится только на устройстве, ошибка хранилища не ломает страницу."""
+    html = page()
+    assert 'id="restore"' in html and "Вернуть прошлую" in html
+    assert "localStorage.setItem" in html and "localStorage.getItem" in html
+    for m in re.finditer(r"localStorage\.", html):
+        assert "try" in html[max(0, m.start() - 120):m.start()]

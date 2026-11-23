@@ -18,6 +18,8 @@
   math-field::part(menu-toggle) { display: none; }
   /* клавиатура — сразу под кнопкой, а не у нижнего края: там её закрывает полоска iPhone */
   #kbd { position: relative; flex: none; margin-top: 12px; overflow: hidden; }
+  #restore { display: none; width: 100%; margin-top: 8px; padding: 10px; font-size: 15px; border: 0; background: none;
+             color: var(--tg-theme-link-color, #2481cc); }
   #fill { flex: 1; display: none; }         /* фон клавиатуры до нижнего края окна */
   #kbd .MLK__backdrop { height: calc(var(--_keyboard-height) + 16px); }   /* MathLive занижает высоту: режет нижний ряд */
   #err { min-height: 20px; margin-top: 8px; color: var(--tg-theme-destructive-text-color, #c00); }
@@ -31,6 +33,7 @@
   <math-field id="f" aria-label="Формула"></math-field>
   <div id="err" role="alert"></div>
   <button id="send" type="button">Отправить</button>
+  <button id="restore" type="button">Вернуть прошлую</button>
 </main>
 <div id="kbd"></div>
 <div id="fill"></div>
@@ -88,6 +91,13 @@ function barColor(c) {
   if (tg && tg.isVersionAtLeast && tg.isVersionAtLeast('7.10')) tg.setBottomBarColor(c);
 }
 
+// прошлая формула — для «Исправить»; лежит только на этом устройстве, без хранилища страница тоже работает
+function saved() { try { return localStorage.getItem('formula') || ''; } catch { return ''; } }
+function save(v) { try { localStorage.setItem('formula', v); } catch { /* приватный режим */ } }
+const restore = document.getElementById('restore');
+if (saved()) restore.style.display = 'block';
+restore.addEventListener('click', () => { f.value = saved(); restore.style.display = 'none'; f.focus(); });
+
 function send() {
   const latex = f.getValue('latex');
   err.textContent = '';
@@ -95,7 +105,7 @@ function send() {
   if (latex.includes('\\placeholder')) { err.textContent = 'Осталась пустая клетка — заполни её или удали.'; return; }
   const payload = JSON.stringify({ v: 1, latex });
   if (new TextEncoder().encode(payload).length > MAX_BYTES) { err.textContent = 'Формула слишком длинная.'; return; }
-  if (tg && tg.initDataUnsafe && tg.platform !== 'unknown') tg.sendData(payload);
+  if (tg && tg.initDataUnsafe && tg.platform !== 'unknown') { save(latex); tg.sendData(payload); }
   else err.textContent = 'Страница открыта не из бота. ' + payload;
 }
 document.getElementById('send').addEventListener('click', send);

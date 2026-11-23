@@ -16,8 +16,10 @@ from aiogram.filters import Command
 from aiogram.types import (BufferedInputFile, CallbackQuery, InlineKeyboardButton,
                            InlineKeyboardMarkup, Message)
 
+from bot.config import Settings
 from bot.db import DB
 from bot.flow import Outcome, TrainSession
+from bot.formula import FormulaError, formula_keyboard, parse_webapp_data
 from bot.ocr import OcrError, YandexOcr
 from bot.photo import OCR_DAILY_LIMIT, photo_attempt_fields, pick_photo_size
 from bot.render import render_options, render_or_text
@@ -42,6 +44,7 @@ class Active:
     level: str
     shown_at: float = 0.0
     pending: str | None = None     # ввод, ожидающий подтверждения превью
+    pending_method: str = "text"   # откуда pending: text | formula (фото — по pending_ocr)
     pending_ocr: str | None = None # что распознал OCR (пока не проверено) — для ocr_raw / ocr_edited
     pending_ocr_id: int | None = None  # запись ocr_requests — свяжем с попыткой
 
@@ -73,6 +76,7 @@ def btn(text: str, data: str) -> InlineKeyboardButton:
 
 
 EXIT_ROW = [btn("✖ Выйти из задачи", "drop")]
+EDITOR_ROW = [btn("✏️ Редактор формул", "editor")]     # необязательный способ ввода: текст и фото остаются
 
 
 def kb(*rows: list[InlineKeyboardButton]) -> InlineKeyboardMarkup:
@@ -100,6 +104,7 @@ async def show_prompt(message: Message, a: Active, db: DB, after_wrong: bool = F
     p = a.session.current()
     a.shown_at = time.monotonic()
     a.pending = a.pending_ocr = a.pending_ocr_id = None
+    a.pending_method = "text"
     if p.kind == "done":
         await finish(message, a, db)
         return
@@ -118,8 +123,8 @@ async def show_prompt(message: Message, a: Active, db: DB, after_wrong: bool = F
             await message.answer(escape(p.text), reply_markup=markup)
     else:
         text = "Введи ещё раз или возьми подсказку." if after_wrong else \
-            escape(p.text) + "\n<i>Введи ответ сообщением или пришли фото формулы.</i>"
-        await message.answer(text, reply_markup=kb(*extra, EXIT_ROW))
+            escape(p.text) + "\n<i>Введи ответ сообщением, в редакторе или пришли фото формулы.</i>"
+        await message.answer(text, reply_markup=kb(EDITOR_ROW, *extra, EXIT_ROW))
 
 
 async def finish(message: Message, a: Active, db: DB):
@@ -314,21 +319,64 @@ async def cb_button(cb: CallbackQuery, db: DB):
     await react(cb.message, a, db, out)
 
 
-@router.message(F.text & ~F.text.startswith("/"))
-async def on_text(message: Message):
-    a = ACTIVE.get(message.chat.id)
-    if a is None or a.session.current().kind != "input":
-        hint = "Выбери вариант кнопкой выше." if a else "Не понял. /train — тренировка, /help — синтаксис."
-        await message.answer(hint)
-        return
-    prev = a.session.preview(message.text)
+async def ask_confirm(message: Message, a: Active, raw: str, method: str) -> bool:
+    """Превью «Ты имел в виду это?» для текста и редактора. False — запись не разобрана (попытка не тратится)."""
+    prev = a.session.preview(raw)
     if not prev.ok:
         await message.answer(f"⚠️ {escape(prev.error)}")
-        return
-    a.pending = message.text
+        return False
+    a.pending, a.pending_method = raw, method
     await message.bot.send_chat_action(message.chat.id, "upload_photo")   # превью рисуется доли секунды
     await send_formula(message, prev.latex, caption="Ты имел в виду это?",
                        markup=kb([btn("Да, проверь", "confirm"), btn("Исправить", "fix")]))
+    return True
+
+
+def input_hint(a: Active | None) -> str | None:
+    """Почему сейчас нельзя ввести ответ; None — можно."""
+    if a is not None and a.session.current().kind == "input":
+        return None
+    return "Выбери вариант кнопкой выше." if a else "Не понял. /train — тренировка, /help — синтаксис."
+
+
+@router.message(F.text & ~F.text.startswith("/"))
+async def on_text(message: Message):
+    a = ACTIVE.get(message.chat.id)
+    if hint := input_hint(a):
+        await message.answer(hint)
+        return
+    await ask_confirm(message, a, message.text, "text")
+
+
+@router.callback_query(F.data == "editor")
+async def cb_editor(cb: CallbackQuery, settings: Settings):
+    a = await active_or_stale(cb)
+    if not a:
+        return
+    if a.session.current().kind != "input":
+        await cb.answer("Сейчас выбери вариант кнопкой", show_alert=True)
+        return
+    await cb.answer()
+    await cb.message.answer("Открой редактор кнопкой под полем ввода.",
+                            reply_markup=formula_keyboard(settings.formula_url))
+
+
+@router.message(F.web_app_data)
+async def on_formula(message: Message):
+    a = ACTIVE.get(message.chat.id)
+    if hint := input_hint(a):
+        await message.answer(hint)
+        return
+    a.pending = a.pending_ocr = a.pending_ocr_id = None       # прошлое непроверенное больше не в силе
+    data = message.web_app_data.data
+    try:
+        raw = parse_webapp_data(data)
+    except FormulaError as exc:
+        logging.warning("редактор формул: %s | data=%r", exc, data[:500])
+        await message.answer(f"⚠️ {escape(str(exc))}")
+        return
+    if not await ask_confirm(message, a, raw, "formula"):
+        logging.warning("редактор формул: не разобрано | data=%r raw=%r", data[:500], raw[:300])
 
 
 @router.callback_query(F.data == "confirm")
@@ -343,7 +391,7 @@ async def cb_confirm(cb: CallbackQuery, db: DB):
     await cb.answer()
     await cb.message.edit_reply_markup(reply_markup=None)
     async with waiting(cb.message, "Проверяю ответ…"):
-        out = await asyncio.to_thread(a.session.answer_text, raw, extra.get("input_method", "text"))
+        out = await asyncio.to_thread(a.session.answer_text, raw, extra.get("input_method", a.pending_method))
     attempt_id = await log(db, a, out, **extra)
     if ocr_id is not None and attempt_id is not None:
         await db.link_ocr_attempt(ocr_id, attempt_id)

@@ -1,4 +1,4 @@
-"""Команды преподавателя: /students, /rename, /kick, /broadcast, /reload, /preview, /export, /formula, /ocrdump. Доступны только ADMIN_TG_ID."""
+"""Команды преподавателя: /students, /rename, /kick, /broadcast, /reload, /preview, /export, /ocrdump. Доступны только ADMIN_TG_ID."""
 import asyncio
 import logging
 from datetime import datetime
@@ -7,9 +7,7 @@ from io import BytesIO
 
 from aiogram import F, Router
 from aiogram.filters import Command, CommandObject
-from aiogram.types import (
-    BufferedInputFile, CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message, ReplyKeyboardRemove,
-)
+from aiogram.types import BufferedInputFile, CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
 
 from bot import commands
 from bot.bank import reload_bank
@@ -17,9 +15,8 @@ from bot.broadcast import BroadcastError, broadcast, recipients, validate_text
 from bot.config import Settings
 from bot.db import DB, DuplicateStudent
 from bot.export import build_xlsx, collect
-from bot.formula import formula_keyboard, formula_report
 from bot.preview import MAX_N, preview_items, preview_lines
-from bot.render import render_lines, render_or_text
+from bot.render import render_lines
 from bot.ocrdump import build_ocr_dump
 from bot.waiting import waiting
 from bot.registration import InvalidName, normalize_name
@@ -135,26 +132,6 @@ def make_router(admin_tg_id: int) -> Router:
         for k, card in enumerate(cards, 1):
             await message.answer_photo(BufferedInputFile(card, f"preview_{k}.png"),
                                        caption=f"{escape(tpl.id)} · {k}/{len(cards)}")
-
-    @router.message(Command("formula"))
-    async def cmd_formula(message: Message, command: CommandObject, settings: Settings):
-        if (command.args or "").strip() == "off":
-            await message.answer("Кнопка убрана.", reply_markup=ReplyKeyboardRemove())
-            return
-        await message.answer("Открой редактор кнопкой под полем ввода. Убрать её: /formula off",
-                             reply_markup=formula_keyboard(settings.formula_url))
-
-    @router.message(F.web_app_data)
-    async def on_formula(message: Message):
-        text, latex = await asyncio.to_thread(formula_report, message.web_app_data.data)
-        await message.answer(text)
-        if latex is None:
-            return
-        img = await asyncio.to_thread(render_or_text, latex, latex)
-        if isinstance(img, bytes):
-            await message.answer_photo(BufferedInputFile(img, "f.png"), caption="Так понял")
-        else:
-            await message.answer(f"<code>{escape(img)}</code>")
 
     @router.message(Command("ocrdump"))
     async def cmd_ocrdump(message: Message, command: CommandObject, db: DB):

@@ -25,9 +25,3 @@ def test_descriptions_fit_telegram_limits():
     for c in GUEST + STUDENT + ADMIN_EXTRA:
         assert 1 <= len(c.command) <= 32 and c.command.islower()
         assert 1 <= len(c.description) <= 256
-
-
-def test_formula_is_admin_only():
-    # прототип ввода через Mini App: пока только преподавателю
-    assert "formula" in names(commands_for(True, True))
-    assert "formula" not in names(commands_for(True, False)) and "formula" not in names(commands_for(False, False))
