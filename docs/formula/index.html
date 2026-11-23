@@ -9,6 +9,7 @@
 <style>
   html, body { margin: 0; background: var(--tg-theme-bg-color, #fff); color: var(--tg-theme-text-color, #111);
                font-family: system-ui, sans-serif; }
+  body { display: flex; flex-direction: column; min-height: 100vh; min-height: 100dvh; }
   main { padding: 16px; }
   p { margin: 0 0 8px; font-size: 14px; color: var(--tg-theme-hint-color, #777); }
   math-field { display: block; width: 100%; box-sizing: border-box; font-size: 24px; padding: 10px;
@@ -16,8 +17,8 @@
                background: var(--tg-theme-secondary-bg-color, #f4f4f5); color: inherit; --caret-color: currentColor; }
   math-field::part(menu-toggle) { display: none; }
   /* клавиатура — сразу под кнопкой, а не у нижнего края: там её закрывает полоска iPhone */
-  #kbd { position: relative; margin-top: 12px; overflow: hidden;
-         margin-bottom: max(12px, env(safe-area-inset-bottom, 0px), var(--tg-safe-area-inset-bottom, 0px)); }
+  #kbd { position: relative; flex: none; margin-top: 12px; overflow: hidden; }
+  #fill { flex: 1; display: none; }         /* фон клавиатуры до нижнего края окна */
   #kbd .MLK__backdrop { height: calc(var(--_keyboard-height) + 16px); }   /* MathLive занижает высоту: режет нижний ряд */
   #err { min-height: 20px; margin-top: 8px; color: var(--tg-theme-destructive-text-color, #c00); }
   #send { width: 100%; margin-top: 4px; padding: 12px; font-size: 16px; border: 0; border-radius: 10px;
@@ -32,6 +33,7 @@
   <button id="send" type="button">Отправить</button>
 </main>
 <div id="kbd"></div>
+<div id="fill"></div>
 <script>
 const MAX_BYTES = 4096;                     // предел sendData
 const tg = window.Telegram && window.Telegram.WebApp;
@@ -45,7 +47,8 @@ customElements.whenDefined('math-field').then(() => {
   f.smartMode = false;
   f.menuItems = [];
   f.mathVirtualKeyboardPolicy = 'auto';     // экранная клавиатура сама открывается на тач-устройствах
-  const fn = (label, tex) => ({ label, insert: tex + '\\left(#0\\right)', class: 'small' });
+  const fn = (label, tex, width = 1) => ({ label, insert: tex + '\\left(#0\\right)', class: 'small', width });
+  const wide = (label, tex) => fn(label, tex, 2);       // «arcctg» не влезает в клавишу обычной ширины
   mathVirtualKeyboard.layouts = [
     { label: '123', rows: [
       ['x', { latex: '\\frac{#@}{#?}', label: 'a/b' }, { latex: '#@^{#?}', label: 'xⁿ' }, '7', '8', '9', '+', { label: 'eˣ', insert: 'e^{#0}' }],
@@ -54,9 +57,9 @@ customElements.whenDefined('math-field').then(() => {
       ['[left]', '[right]', { label: '+C', insert: '+C' }, '0', '.', '\\pi', { label: 'AC', command: 'deleteAll', class: 'small' }, '[backspace]'],
     ]},
     { label: 'sin', rows: [
-      [fn('sin', '\\sin'), fn('cos', '\\cos'), fn('tg', '\\operatorname{tg}'), fn('ctg', '\\operatorname{ctg}')],
-      [fn('arcsin', '\\arcsin'), fn('arccos', '\\arccos'), fn('arctg', '\\operatorname{arctg}'), fn('arcctg', '\\operatorname{arcctg}')],
-      [fn('sh', '\\operatorname{sh}'), fn('ch', '\\operatorname{ch}'), fn('th', '\\operatorname{th}'), fn('cth', '\\operatorname{cth}')],
+      [wide('sin', '\\sin'), wide('cos', '\\cos'), wide('tg', '\\operatorname{tg}'), wide('ctg', '\\operatorname{ctg}')],
+      [wide('arcsin', '\\arcsin'), wide('arccos', '\\arccos'), wide('arctg', '\\operatorname{arctg}'), wide('arcctg', '\\operatorname{arcctg}')],
+      [wide('sh', '\\operatorname{sh}'), wide('ch', '\\operatorname{ch}'), wide('th', '\\operatorname{th}'), wide('cth', '\\operatorname{cth}')],
       ['x', { latex: '#@^{2}', label: 'x²' }, '[left]', '[right]', '[backspace]'],
     ]},
   ];
@@ -65,10 +68,25 @@ customElements.whenDefined('math-field').then(() => {
   mathVirtualKeyboard.addEventListener('geometrychange', () => {
     const h = mathVirtualKeyboard.boundingRect.height;
     kbd.style.height = h ? (h + 16) + 'px' : '0';       // +16 — как у .MLK__backdrop
+    paintBelow(h > 0);
   });
   f.focus();
   if (matchMedia('(pointer: coarse)').matches) mathVirtualKeyboard.show();   // телефон: сразу открыта
 });
+
+// ниже клавиатуры — тот же цвет, что у неё (в тёмной теме он другой), и нижняя полоса Telegram тоже
+function paintBelow(on) {
+  const fill = document.getElementById('fill'), plate = document.querySelector('#kbd .MLK__backdrop');
+  fill.style.display = on ? 'block' : 'none';
+  if (!on || !plate) { barColor('bottom_bar_bg_color'); return; }
+  const color = getComputedStyle(plate).backgroundColor;
+  fill.style.background = color;
+  const rgb = color.match(/\d+/g);
+  if (rgb) barColor('#' + rgb.slice(0, 3).map(v => (+v).toString(16).padStart(2, '0')).join(''));
+}
+function barColor(c) {
+  if (tg && tg.isVersionAtLeast && tg.isVersionAtLeast('7.10')) tg.setBottomBarColor(c);
+}
 
 function send() {
   const latex = f.getValue('latex');
