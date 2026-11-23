@@ -1,4 +1,4 @@
-"""LaTeX в русской нотации: tg, ctg, arctg, arcctg, ln."""
+"""LaTeX в русской нотации: tg, ctg, arctg, arcctg, ln, sh, ch, th, cth."""
 import re
 
 import sympy as sp
@@ -11,6 +11,10 @@ _RU = [
     (re.compile(r"\\operatorname\{arccot\}"), r"\\mathrm{arcctg}"),
     (re.compile(r"\\tan(?![a-z])"), r"\\mathrm{tg}"),
     (re.compile(r"\\cot(?![a-z])"), r"\\mathrm{ctg}"),
+    (re.compile(r"\\sinh(?![a-z])"), r"\\mathrm{sh}"),
+    (re.compile(r"\\cosh(?![a-z])"), r"\\mathrm{ch}"),
+    (re.compile(r"\\tanh(?![a-z])"), r"\\mathrm{th}"),
+    (re.compile(r"\\coth(?![a-z])"), r"\\mathrm{cth}"),
     (re.compile(r"\\operatorname\{([a-z]+)\}"), r"\\mathrm{\1}"),   # mathtext и \operatorname не дружат
     # mathtext съедает пробелы: «2∛x» читается как «2³√x», «48ln», «x³ln», «x arctg» слипаются
     (re.compile(r"([\w})])\s*(\\(?:sqrt\[|ln|log|sin|cos|sinh|cosh|tanh|coth|arcsin|arccos|mathrm|exp)(?![a-z]))"),

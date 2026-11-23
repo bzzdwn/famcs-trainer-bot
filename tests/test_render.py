@@ -31,6 +31,31 @@ def test_ru_notation(expr, must, must_not):
         assert bad not in s
 
 
+@pytest.mark.parametrize("expr, ru", [
+    (sp.sinh(x), "sh"), (sp.cosh(x), "ch"), (sp.tanh(x), "th"), (sp.coth(x), "cth"),
+])
+def test_ru_hyperbolic(expr, ru):
+    for e in (expr, expr**2, 3*expr/x, sp.exp(x)*expr):
+        s = ru_latex(e)
+        assert rf"\mathrm{{{ru}}}" in s, s                          # именно sh/ch/th/cth, прямым шрифтом
+        for bad in ("sinh", "cosh", "tanh", "coth"):
+            assert bad not in s, s
+        assert render_latex(s).startswith(PNG_MAGIC)                # mathtext это рисует
+
+
+def test_ru_hyperbolic_does_not_touch_trig():
+    s = ru_latex(sp.sin(x) + sp.cos(x) + sp.tan(x) + sp.cot(x) + sp.atan(x))
+    assert r"\sin" in s and r"\cos" in s
+    for name in ("tg", "ctg", "arctg"):
+        assert rf"\mathrm{{{name}}}" in s
+
+
+def test_ru_hyperbolic_spacing():
+    # «2 sh x», «eˣ ch x» не слипаются — как у остальных функций
+    assert r"2\,\mathrm{sh}" in ru_latex(2*sp.sinh(x))
+    assert r"e^{x}\,\mathrm{ch}" in ru_latex(sp.exp(x)*sp.cosh(x))
+
+
 def test_ru_latex_from_string():
     assert "arctg" in ru_latex("2*atan(tan(x/2)/3)/3")
 
