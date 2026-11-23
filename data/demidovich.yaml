@@ -71,3 +71,14 @@
 2146: {status: covered, template: mix_trig_sq_01}
 2147: {status: covered, template: mix_trig_pow_01}
 2148: {status: covered, template: mix_trig_root_01}
+2149: {status: covered, template: mix_parts_atan_01}
+2150: {status: covered, template: mix_parts_log_06}
+2151: {status: covered, template: mix_parts_log_07}
+2152: {status: covered, template: mix_parts_atan_02}
+2153: {status: covered, template: mix_trig_under_01}
+2154: {status: covered, template: mix_parts_acos_02}
+2155: {status: covered, template: mix_parts_atan_03}
+2156: {status: covered, template: mix_parts_acot_01}
+2157: {status: covered, template: mix_parts_log_08}
+2158: {status: covered, template: mix_parts_asin_02}
+2159: {status: covered, template: mix_parts_acot_02}

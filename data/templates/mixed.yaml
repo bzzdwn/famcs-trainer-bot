@@ -725,3 +725,376 @@
   examples:
     - {number: 2148, params: {k: 1},
        answer: "1/sqrt(1 + cos(x)) - log((sqrt(2) + sqrt(1 + cos(x)))/(sqrt(2) - sqrt(1 + cos(x))))/(2*sqrt(2))"}
+
+# --- № 2149–2159 ---
+
+- id: mix_parts_atan_01
+  topic: indef_integral.mixed
+  source: "Демидович, № 2149"
+  difficulty: C
+  var: x
+  params:
+    a: {int: [-3, 3], exclude: [0]}
+    b: {int: [-3, 3], exclude: [0]}
+  constraints: ["a != b"]
+  integrand: "(a*x**2 + b)/(x**2 + 1)*atan(x)"
+  checkpoints:
+    - type: choice
+      prompt: "С чего начнёшь?"
+      options: ["выделить целую часть дроби, затем по частям", "t = 1/x", "произведение → сумма", "x = sin t"]
+      correct: ["выделить целую часть дроби, затем по частям"]
+      hint: "Дробь неправильная: число + число/(x² + 1). Первое — по частям, второе — arctg x d(arctg x)."
+    - type: expr
+      prompt: "Выдели целую часть дроби и раскрой скобки"
+      expected: "a*atan(x) + (b - a)*atan(x)/(x**2 + 1)"
+      same_as: integrand
+      distractors:
+        - "a*atan(x) + (a + b)*atan(x)/(x**2 + 1)"     # знак: ax² = a(x² + 1) − a
+        - "a*atan(x) + b*atan(x)/(x**2 + 1)"           # забыл вычесть a
+        - "a + (b - a)*atan(x)/(x**2 + 1)"             # не домножил целую часть на arctg x
+      hint: "ax² + b = a(x² + 1) + (b − a)."
+    - type: antiderivative
+      prompt: "Ответ (с +C)"
+      reference: "a*(x*atan(x) - log(x**2 + 1)/2) + (b - a)/2*atan(x)**2"
+  blitz_method: "по частям"
+  method_alternatives: ["выделение целой части", "внесение под дифференциал", "тригонометрическая подстановка"]
+  examples:   # в книге a, b общие; здесь формула ответа на числах
+    - {number: 2149, params: {a: 2, b: 3}, answer: "2*(x*atan(x) - log(x**2 + 1)/2) - (2 - 3)/2*atan(x)**2"}
+
+- id: mix_parts_log_06
+  topic: indef_integral.mixed
+  source: "Демидович, № 2150"
+  difficulty: C
+  var: x
+  params:
+    a: {int: [-3, 3], exclude: [0]}
+    b: {int: [-3, 3], exclude: [0]}
+  constraints: ["a + b != 0"]
+  integrand: "(a*x**2 + b)/(x**2 - 1)*log(Abs((x - 1)/(x + 1)))"
+  checkpoints:
+    - type: choice
+      prompt: "С чего начнёшь?"
+      options: ["выделить целую часть дроби, затем по частям", "t = 1/x", "произведение → сумма", "x = sin t"]
+      correct: ["выделить целую часть дроби, затем по частям"]
+      hint: "Дробь неправильная: число + число/(x² − 1), а (ln|(x − 1)/(x + 1)|)′ = 2/(x² − 1)."
+    - type: expr
+      prompt: "Выдели целую часть дроби и раскрой скобки"
+      expected: "a*log(Abs((x - 1)/(x + 1))) + (a + b)*log(Abs((x - 1)/(x + 1)))/(x**2 - 1)"
+      same_as: integrand
+      domain: [1.2, 4.0]
+      distractors:
+        - "a*log(Abs((x - 1)/(x + 1))) + (b - a)*log(Abs((x - 1)/(x + 1)))/(x**2 - 1)"   # знак: ax² = a(x² − 1) + a
+        - "a*log(Abs((x - 1)/(x + 1))) + b*log(Abs((x - 1)/(x + 1)))/(x**2 - 1)"         # забыл прибавить a
+        - "a + (a + b)*log(Abs((x - 1)/(x + 1)))/(x**2 - 1)"                             # не домножил на ln
+      hint: "ax² + b = a(x² − 1) + (a + b)."
+    - type: antiderivative
+      prompt: "Ответ (с +C)"
+      reference: "a*(x*log(Abs((x - 1)/(x + 1))) - log(Abs(x**2 - 1))) + (a + b)/4*log(Abs((x - 1)/(x + 1)))**2"
+      domain: [1.2, 4.0]
+  blitz_method: "по частям"
+  method_alternatives: ["выделение целой части", "внесение под дифференциал", "разложение на простые дроби"]
+  examples:   # в книге a, b общие; здесь формула ответа на числах
+    - {number: 2150, params: {a: 2, b: 3},
+       answer: "2*(x*log(Abs((x - 1)/(x + 1))) - log(Abs(x**2 - 1))) + (2 + 3)/4*log(Abs((x - 1)/(x + 1)))**2"}
+
+- id: mix_parts_log_07
+  topic: indef_integral.mixed
+  source: "Демидович, № 2151"
+  difficulty: C
+  var: x
+  params:
+    c: {int: [1, 3]}
+  integrand: "x*log(x)/(c + x**2)**2"
+  checkpoints:
+    - type: choice
+      prompt: "С чего начнёшь?"
+      options: ["по частям: u = ln x", "t = ln x", "разложение на простые дроби", "x = sin t"]
+      correct: ["по частям: u = ln x"]
+      hint: "Остальное — готовый дифференциал: x dx/w² = −½ d(1/w), где w — скобка в знаменателе."
+    - type: expr
+      prompt: "По частям: u = ln x, v = −1/(2·(скобка из знаменателя)). Запиши функцию под оставшимся интегралом, то есть −v·u′"
+      expected: "1/(2*x*(c + x**2))"
+      same_as: "diff(log(x), x)/(2*(c + x**2))"
+      domain: [0.2, 3.0]
+      distractors:
+        - "1/(x*(c + x**2))"               # потерял ½
+        - "1/(2*x*(c + x**2)**2)"          # не проинтегрировал dv
+        - "1/(2*(c + x**2))"               # потерял u′ = 1/x
+      hint: "u′ = 1/x."
+    - type: antiderivative
+      prompt: "Ответ (с +C)"
+      reference: "-log(x)/(2*(c + x**2)) + log(x**2/(c + x**2))/(4*c)"
+      domain: [0.2, 3.0]
+  blitz_method: "по частям"
+  examples:
+    - {number: 2151, params: {c: 1}, answer: "-log(x)/(2*(1 + x**2)) + log(x**2/(1 + x**2))/4"}
+
+- id: mix_parts_atan_02
+  topic: indef_integral.mixed
+  source: "Демидович, № 2152"
+  difficulty: C
+  var: x
+  params:
+    p: {int: [0, 2]}
+    q: {int: [1, 3]}
+  integrand: "x*(p + q*atan(x))/sqrt(1 + x**2)"
+  checkpoints:
+    - type: choice
+      prompt: "С чего начнёшь?"
+      options: ["по частям: dv = x dx/√(1 + x²)", "разложение на простые дроби", "x = sin t", "t = 1/x"]
+      correct: ["по частям: dv = x dx/√(1 + x²)"]
+      hint: "x dx/√(1 + x²) = d√(1 + x²), а arctg x уходит дифференцированием."
+    - type: expr
+      prompt: "По частям: v = √(1 + x²), u — множитель с arctg x. Запиши функцию под оставшимся интегралом, то есть −v·u′"
+      expected: "-q/sqrt(1 + x**2)"
+      same_as: "-sqrt(1 + x**2)*diff(p + q*atan(x), x)"
+      distractors:
+        - "q/sqrt(1 + x**2)"               # знак
+        - "-q/(1 + x**2)"                  # забыл v
+        - "-q*sqrt(1 + x**2)"              # забыл u′
+      hint: "(arctg x)′ = 1/(1 + x²), одна степень корня сокращается."
+    - type: antiderivative
+      prompt: "Ответ (с +C)"
+      reference: "p*sqrt(1 + x**2) + q*(sqrt(1 + x**2)*atan(x) - log(x + sqrt(1 + x**2)))"
+  blitz_method: "по частям"
+  method_alternatives: ["тригонометрическая подстановка"]
+  examples:
+    - {number: 2152, params: {p: 0, q: 1}, answer: "sqrt(1 + x**2)*atan(x) - log(x + sqrt(1 + x**2))"}
+
+- id: mix_trig_under_01
+  topic: indef_integral.mixed
+  source: "Демидович, № 2153"
+  difficulty: C
+  var: x
+  params:
+    c: {int: [1, 3]}
+  integrand: "sin(2*x)/sqrt(c + cos(x)**4)"
+  checkpoints:
+    - type: choice
+      prompt: "Какую замену применишь?"
+      options: ["t = cos²x", "по частям", "t = 1/x", "вспомогательный угол"]
+      correct: ["t = cos²x"]
+      hint: "d(cos²x) = −2 sin x cos x dx = −sin 2x dx."
+    - type: transformed_integrand
+      prompt: "Запиши подынтегральную функцию после замены (по t)"
+      var: t
+      substitution: "cos(x)**2"
+      expected: "-1/sqrt(c + t**2)"
+      domain: [0.1, 0.9]
+      distractors:
+        - "1/sqrt(c + t**2)"               # знак d(cos²x)
+        - "-1/sqrt(c + t)"                 # cos⁴x = t
+        - "-t/sqrt(c + t**2)"              # лишний t
+      skippable: true
+      hint: "sin 2x dx = −dt, cos⁴x = t²."
+    - type: antiderivative
+      prompt: "Ответ (с +C)"
+      reference: "-log(cos(x)**2 + sqrt(c + cos(x)**4))"
+  blitz_method: "внесение под дифференциал"
+  method_alternatives: ["замена t = cos 2x", "замена t = cos x / sin x (нечётная степень)", "замена t = tg x"]
+  examples:
+    - {number: 2153, params: {c: 1}, answer: "-log(cos(x)**2 + sqrt(1 + cos(x)**4))"}
+
+- id: mix_parts_acos_02
+  topic: indef_integral.mixed
+  source: "Демидович, № 2154"
+  difficulty: C
+  var: x
+  params:
+    k: {int: [1, 3]}
+  integrand: "x**k*acos(x)/sqrt(1 - x**2)"
+  checkpoints:
+    - type: choice
+      prompt: "Какая замена убирает и корень, и arccos?"
+      options: ["t = arccos x", "x = tg t", "t = 1/x", "t = ln x"]
+      correct: ["t = arccos x"]
+      hint: "dx/√(1 − x²) = −d(arccos x); дальше по частям."
+    - type: transformed_integrand
+      prompt: "Запиши подынтегральную функцию после замены (по t)"
+      var: t
+      substitution: "acos(x)"
+      expected: "-t*cos(t)**k"
+      domain: [0.2, 1.4]
+      distractors:
+        - "t*cos(t)**k"                    # знак d(arccos x)
+        - "-t*sin(t)**k"                   # x = sin t
+        - "-t*cos(t)**k*sin(t)"            # забыл сократить корень
+      skippable: true
+      hint: "x = cos t, dx = −sin t dt, √(1 − x²) = sin t."
+    - type: antiderivative
+      prompt: "Ответ (с +C)"
+      reference: "Subs(Integral(-t*cos(t)**k, t), t, acos(x))"
+      domain: [-0.9, 0.9]
+  blitz_method: "по частям"
+  method_alternatives: ["тригонометрическая подстановка"]
+  examples:   # на скане (2 + x²)/9; верно (2 + x²)/3
+    - {number: 2154, params: {k: 3}, answer: "-(6*x + x**3)/9 - (2 + x**2)/3*sqrt(1 - x**2)*acos(x)"}
+
+- id: mix_parts_atan_03
+  topic: indef_integral.mixed
+  source: "Демидович, № 2155"
+  difficulty: C
+  var: x
+  params:
+    k: {choice: [2, 4, 6]}
+  integrand: "x**k*atan(x)/(1 + x**2)"
+  checkpoints:
+    - type: choice
+      prompt: "С чего начнёшь?"
+      options: ["выделить целую часть дроби, затем по частям", "t = 1/x", "произведение → сумма", "x = sin t"]
+      correct: ["выделить целую часть дроби, затем по частям"]
+      hint: "Раздели степень на x² + 1 с остатком: многочлен — по частям, остаток — arctg x d(arctg x)."
+    - type: expr
+      prompt: "Выдели целую часть дроби и раскрой скобки"
+      expected: "quo(x**k, x**2 + 1)*atan(x) + (-1)**(k/2)*atan(x)/(1 + x**2)"
+      same_as: integrand
+      distractors:
+        - "quo(x**k, x**2 + 1)*atan(x) - (-1)**(k/2)*atan(x)/(1 + x**2)"   # знак остатка
+        - "quo(x**k, x**2 + 1)*atan(x)"                                     # потерял остаток
+        - "x**(k - 2)*atan(x) + (-1)**(k/2)*atan(x)/(1 + x**2)"             # потерял средние члены
+      hint: "x² = (x² + 1) − 1, x⁴ = (x² + 1)(x² − 1) + 1 и так далее."
+    - type: antiderivative
+      prompt: "Ответ (с +C)"
+      reference: "atan(x)*Integral(quo(x**k, x**2 + 1), x) - Integral(Integral(quo(x**k, x**2 + 1), x)/(1 + x**2), x)
+        + (-1)**(k/2)*atan(x)**2/2"
+  blitz_method: "по частям"
+  method_alternatives: ["выделение целой части", "тригонометрическая подстановка"]
+  examples:
+    - {number: 2155, params: {k: 4},
+       answer: "-x**2/6 - (x - x**3/3)*atan(x) + atan(x)**2/2 + 2*log(1 + x**2)/3"}
+
+- id: mix_parts_acot_01
+  topic: indef_integral.mixed
+  source: "Демидович, № 2156"
+  difficulty: C
+  var: x
+  params:
+    n: {choice: [2, 3]}
+  integrand: "x*acot(x)/(1 + x**2)**n"
+  checkpoints:
+    - type: choice
+      prompt: "С чего начнёшь?"
+      options: ["по частям: u = arcctg x", "разложение на простые дроби", "x = sin t", "t = ln x"]
+      correct: ["по частям: u = arcctg x"]
+      hint: "x dx/(1 + x²)ⁿ — степень под дифференциалом; (arcctg x)′ = −1/(1 + x²)."
+    - type: expr
+      prompt: "По частям: u = arcctg x, v — степень 1 + x² с коэффициентом. Запиши функцию под оставшимся интегралом, то есть −v·u′"
+      expected: "-1/(2*(n - 1)*(1 + x**2)**n)"
+      same_as: "diff(acot(x), x)/(2*(n - 1)*(1 + x**2)**(n - 1))"
+      domain: [0.2, 3.0]
+      distractors:
+        - "1/(2*(n - 1)*(1 + x**2)**n)"            # знак (arcctg x)′
+        - "-1/((n - 1)*(1 + x**2)**n)"             # потерял ½ из x dx
+        - "-1/(2*(n - 1)*(1 + x**2)**(n - 1))"     # забыл u′
+      hint: "x dx = ½ d(1 + x²), показатель уменьшается на 1 по модулю."
+    - type: antiderivative
+      prompt: "Ответ (с +C)"
+      reference: "-acot(x)/(2*(n - 1)*(1 + x**2)**(n - 1)) - Integral(1/(1 + x**2)**n, x)/(2*(n - 1))"
+      domain: [0.2, 3.0]      # x > 0: у sympy arcctg x < 0 при x < 0, у нас arcctg ∈ (0, π)
+  blitz_method: "по частям"
+  method_alternatives: ["тригонометрическая подстановка"]
+  examples:   # на скане в ответе arctg x; верно arcctg x (как в условии)
+    - {number: 2156, params: {n: 2}, answer: "-x/(4*(1 + x**2)) - (1 - x**2)/(4*(1 + x**2))*acot(x)"}
+
+- id: mix_parts_log_08
+  topic: indef_integral.mixed
+  source: "Демидович, № 2157"
+  difficulty: C
+  var: x
+  params:
+    c: {int: [1, 3]}
+  integrand: "x*log(x + sqrt(1 + x**2))/(c - x**2)**2"
+  checkpoints:
+    - type: choice
+      prompt: "С чего начнёшь?"
+      options: ["по частям: u = ln(x + √(1 + x²))", "разложение на простые дроби", "x = sin t", "t = 1/x"]
+      correct: ["по частям: u = ln(x + √(1 + x²))"]
+      hint: "(ln(x + √(1 + x²)))′ = 1/√(1 + x²); x dx/w² = ½ d(1/w), где w — скобка в знаменателе."
+    - type: expr
+      prompt: "По частям: u = ln(…), v = 1/(2·(скобка из знаменателя)). Запиши функцию под оставшимся интегралом, то есть −v·u′"
+      expected: "-1/(2*(c - x**2)*sqrt(1 + x**2))"
+      same_as: "-diff(log(x + sqrt(1 + x**2)), x)/(2*(c - x**2))"
+      domain: [-0.9, 0.9]
+      distractors:
+        - "1/(2*(c - x**2)*sqrt(1 + x**2))"            # знак
+        - "-1/((c - x**2)*sqrt(1 + x**2))"             # потерял ½
+        - "-1/(2*(c - x**2)*(x + sqrt(1 + x**2)))"     # (ln w)′ = 1/w без w′
+      hint: "Производная длинного логарифма — 1/√(1 + x²)."
+    - type: antiderivative
+      prompt: "Ответ (с +C)"
+      reference: "log(x + sqrt(1 + x**2))/(2*(c - x**2))
+        + log((sqrt(c)*sqrt(1 + x**2) - sqrt(c + 1)*x)/(sqrt(c)*sqrt(1 + x**2) + sqrt(c + 1)*x))/(4*sqrt(c*(c + 1)))"
+      domain: [-0.9, 0.9]
+  blitz_method: "по частям"
+  examples:
+    - {number: 2157, params: {c: 1},
+       answer: "log(x + sqrt(1 + x**2))/(2*(1 - x**2))
+         + log((sqrt(1 + x**2) - x*sqrt(2))/(sqrt(1 + x**2) + x*sqrt(2)))/(4*sqrt(2))"}
+
+- id: mix_parts_asin_02
+  topic: indef_integral.mixed
+  source: "Демидович, № 2158"
+  difficulty: C
+  var: x
+  params:
+    c: {int: [1, 3]}
+  integrand: "sqrt(c**2 - x**2)*asin(x/c)"
+  checkpoints:
+    - type: choice
+      prompt: "Какая замена убирает и корень, и arcsin?"
+      options: ["t = arcsin(…)", "x = tg t", "t = 1/x", "t = ln x"]
+      correct: ["t = arcsin(…)"]
+      hint: "Возьми за t весь арксинус: корень станет косинусом. Дальше понижение степени и по частям."
+    - type: transformed_integrand
+      prompt: "Запиши подынтегральную функцию после замены t = arcsin(…) (по t)"
+      var: t
+      substitution: "asin(x/c)"
+      expected: "c**2*t*cos(t)**2"
+      domain: [0.1, 1.4]
+      distractors:
+        - "c**2*t*cos(t)"                  # забыл dx
+        - "c**2*cos(t)**2"                 # потерял arcsin = t
+        - "c**2*t*sin(t)**2"               # корень = sin t
+      skippable: true
+      hint: "Корень даёт cos t, dx даёт ещё один cos t (и коэффициенты)."
+    - type: antiderivative
+      prompt: "Ответ (с +C)"
+      reference: "-x**2/4 + x/2*sqrt(c**2 - x**2)*asin(x/c) + c**2*asin(x/c)**2/4"
+      domain: ["-0.9*c", "0.9*c"]
+  blitz_method: "тригонометрическая подстановка"
+  method_alternatives: ["по частям"]
+  examples:
+    - {number: 2158, params: {c: 1}, answer: "-x**2/4 + x/2*sqrt(1 - x**2)*asin(x) + asin(x)**2/4"}
+
+- id: mix_parts_acot_02
+  topic: indef_integral.mixed
+  source: "Демидович, № 2159"
+  difficulty: C
+  var: x
+  params:
+    n: {int: [1, 3]}
+  integrand: "x*(1 + x**2)**n*acot(x)"
+  checkpoints:
+    - type: choice
+      prompt: "С чего начнёшь?"
+      options: ["по частям: u = arcctg x", "разложение на простые дроби", "x = sin t", "t = ln x"]
+      correct: ["по частям: u = arcctg x"]
+      hint: "v удобно взять степенью 1 + x²: тогда она сократится с (arcctg x)′ = −1/(1 + x²)."
+    - type: expr
+      prompt: "По частям: u = arcctg x, v — степень 1 + x² с коэффициентом. Запиши функцию под оставшимся интегралом, то есть −v·u′"
+      expected: "(1 + x**2)**n/(2*(n + 1))"
+      same_as: "-(1 + x**2)**(n + 1)/(2*(n + 1))*diff(acot(x), x)"
+      domain: [0.2, 3.0]
+      distractors:
+        - "-(1 + x**2)**n/(2*(n + 1))"             # знак (arcctg x)′
+        - "(1 + x**2)**n/(n + 1)"                  # потерял ½ из x dx
+        - "(1 + x**2)**(n + 1)/(2*(n + 1))"        # забыл u′
+      hint: "x dx = ½ d(1 + x²)."
+    - type: antiderivative
+      prompt: "Ответ (с +C)"
+      reference: "((1 + x**2)**(n + 1)*acot(x) + Integral(expand((1 + x**2)**n), x))/(2*(n + 1))"
+      domain: [0.2, 3.0]      # x > 0: см. mix_parts_acot_01
+  blitz_method: "по частям"
+  method_alternatives: ["тригонометрическая подстановка"]
+  examples:   # на скане в ответе arctg x; верно arcctg x (как в условии)
+    - {number: 2159, params: {n: 1}, answer: "x/4 + x**3/12 + (1 + x**2)**2/4*acot(x)"}

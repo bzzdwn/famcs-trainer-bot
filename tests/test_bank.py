@@ -1,6 +1,8 @@
 """Прогон всего банка шаблонов: каждый шаблон × N_INSTANCES экземпляров.
 Шаблоны подхватываются из data/templates автоматически."""
+import random
 import time
+from functools import lru_cache
 from pathlib import Path
 
 import pytest
@@ -10,7 +12,7 @@ from core.checker import (
     FACTOR, NO_CONST, OK, SIGN,
     check_antiderivative, check_expr, check_with_timeout, shutdown_pool,
 )
-from core.generator import N_DISTRACTORS, generate
+from core.generator import N_DISTRACTORS, generate, sample_params
 from core.parser import parse_trusted
 from core.templates import load_templates
 
@@ -20,8 +22,23 @@ BANK = load_templates(Path(__file__).resolve().parent.parent / "data" / "templat
 IDS = sorted(BANK)
 
 
+@lru_cache(maxsize=None)
 def instances(tid, n=N_INSTANCES):
-    return [(seed, generate(BANK[tid], seed)) for seed in range(n)]
+    """Экземпляры для seed 0…n−1 без повторов: экземпляр определяется параметрами (build детерминирован),
+    поэтому одинаковые наборы параметров проверяем один раз."""
+    first: dict[tuple, int] = {}
+    for seed in range(n):
+        params = sample_params(BANK[tid], random.Random(seed))      # те же, что возьмёт generate(seed)
+        first.setdefault(tuple(sorted(params.items())), seed)
+    return tuple((seed, generate(BANK[tid], seed)) for seed in first.values())
+
+
+@pytest.mark.parametrize("tid", IDS)
+def test_instances_cover_all_sampled_params(tid):
+    # дедупликация ничего не потеряла: наборы параметров те же, что у всех seed подряд
+    want = {tuple(sorted(sample_params(BANK[tid], random.Random(s)).items())) for s in range(N_INSTANCES)}
+    got = [tuple(sorted(i.params.items())) for _, i in instances(tid)]
+    assert set(got) == want and len(got) == len(want)
 
 
 def antiderivative_cp(inst):
