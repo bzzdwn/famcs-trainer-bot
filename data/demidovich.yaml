@@ -82,3 +82,15 @@
 2157: {status: covered, template: mix_parts_log_08}
 2158: {status: covered, template: mix_parts_asin_02}
 2159: {status: covered, template: mix_parts_acot_02}
+2160: {status: covered, template: mix_exp_pow_01}
+2161: {status: covered, template: mix_exp_asin_01}
+2162: {status: covered, template: mix_exp_atan_01}
+2163: {status: covered, template: mix_exp_diff_01}
+2164: {status: covered, template: mix_hyp_root_01}
+2165: {status: covered, template: mix_exp_trig_01}
+2166: {status: covered, template: mix_abs_pow_01}
+2167: {status: covered, template: mix_abs_pow_01}
+2168: {status: covered, template: mix_abs_sq_01}
+2169: {status: covered, template: mix_abs_diff_01}
+2170: {status: skip, reason: "ответ кусочный; sgn и условий нет в синтаксисе ввода"}
+2171: {status: skip, reason: "max в условии, ответ кусочный; нет в синтаксисе ввода"}
