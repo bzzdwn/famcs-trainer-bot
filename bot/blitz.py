@@ -87,7 +87,8 @@ class BlitzRun:
         tasks = []
         for tpl in order[:size]:
             inst = generate(tpl, rng.randrange(2**32))
-            opts = rng.sample([m for m in methods if m != tpl.blitz_method], N_OPTIONS - 1) + [tpl.blitz_method]
+            valid = {tpl.blitz_method, *tpl.method_alternatives}     # рабочие методы не годятся в неверные кнопки
+            opts = rng.sample([m for m in methods if m not in valid], N_OPTIONS - 1) + [tpl.blitz_method]
             rng.shuffle(opts)
             tasks.append(BlitzTask(tpl.id, inst, tpl.blitz_method, tuple(opts), tpl.checkpoints[0].hint))
         self._tasks = tuple(tasks)

@@ -1,4 +1,5 @@
 import copy
+import dataclasses
 from pathlib import Path
 
 import pytest
@@ -46,6 +47,23 @@ def test_no_repeats_when_bank_is_big():
     run = BlitzRun(BANK, seed=2)
     ids = [t.template_id for t in run.tasks]
     assert len(set(ids)) == len(ids)
+
+
+def test_alternatives_not_among_wrong_options():
+    # рабочий метод (method_alternatives) не должен попадать в кнопки: за него засчитали бы ошибку
+    bank = toy_bank(["м1", "м2", "м3", "м4", "м5", "м6"])
+    bank["toy_0"] = dataclasses.replace(bank["toy_0"], method_alternatives=("м2", "м3"))
+    for seed in range(30):
+        for t in BlitzRun(bank, seed=seed).tasks:
+            assert len(set(t.options)) == N_OPTIONS
+            assert not set(t.options) & set(bank[t.template_id].method_alternatives), (seed, t.template_id)
+
+
+def test_bank_leaves_enough_wrong_options():
+    # в настоящем банке на каждый шаблон хватает методов, кроме верного и альтернатив
+    methods = {t.blitz_method for t in BANK.values()}
+    for t in BANK.values():
+        assert len(methods - {t.blitz_method, *t.method_alternatives}) >= N_OPTIONS - 1, t.id
 
 
 def test_small_bank_repeats():

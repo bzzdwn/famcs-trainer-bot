@@ -60,3 +60,14 @@
 2135: {status: covered, template: mix_recip_01}
 2136: {status: covered, template: mix_recip_02}
 2137: {status: covered, template: mix_sin_sub_01}
+2138: {status: covered, template: mix_irr_conj_01}
+2139: {status: covered, template: mix_parts_log_01}
+2140: {status: covered, template: mix_parts_acos_01}
+2141: {status: covered, template: mix_parts_log_02}
+2142: {status: covered, template: mix_parts_asin_01}
+2143: {status: covered, template: mix_parts_log_03}
+2144: {status: covered, template: mix_parts_log_04}
+2145: {status: covered, template: mix_parts_log_05}
+2146: {status: covered, template: mix_trig_sq_01}
+2147: {status: covered, template: mix_trig_pow_01}
+2148: {status: covered, template: mix_trig_root_01}
