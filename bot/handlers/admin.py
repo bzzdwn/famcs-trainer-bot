@@ -15,6 +15,7 @@ from bot.broadcast import BroadcastError, broadcast, recipients, validate_text
 from bot.config import Settings
 from bot.db import DB, DuplicateStudent
 from bot.export import build_xlsx, collect
+from bot.genpool import BlitzStock
 from bot.preview import MAX_N, preview_items, preview_lines
 from bot.render import render_lines
 from bot.ocrdump import build_ocr_dump
@@ -103,9 +104,11 @@ def make_router(admin_tg_id: int) -> Router:
         await message.answer("Удалён." if ok else "Нет студента с таким id.")
 
     @router.message(Command("reload"))
-    async def cmd_reload(message: Message, bank: dict, settings: Settings):
+    async def cmd_reload(message: Message, bank: dict, settings: Settings, stock: BlitzStock):
         await message.answer("Перечитываю шаблоны…")
         ok, msg = await asyncio.to_thread(reload_bank, bank, settings.templates_dir)
+        if ok:
+            stock.reset()                            # серии блица собраны по старым шаблонам
         await message.answer(("✅ " if ok else "❌ Банк не изменён.\n") + escape(msg))
 
     @router.message(Command("export"))

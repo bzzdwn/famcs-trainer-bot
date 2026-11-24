@@ -12,18 +12,20 @@ from aiogram.client.default import DefaultBotProperties
 from aiogram.types import CallbackQuery, Chat, Message, ReplyKeyboardMarkup, Update, User, WebAppData
 
 import bot.formula
+from bot.blitz import BlitzRun
 from bot.commands import commands_for
 from bot.config import Settings
 from bot.db import DB
 from bot.flow import TrainSession
 from bot.handlers import admin, start, train
 from core.checker import check_antiderivative, check_expr
-from core.generator import build
+from core.generator import build, generate
+from core.hints import answer_hints
 from core.templates import load_templates
 
 BANK = load_templates(Path(__file__).resolve().parent.parent / "data" / "templates")
 ADMIN, STUDENT, STRANGER = 7, 8, 9
-SETTINGS = Settings("1:A", ADMIN, "code", ":memory:", Path("."))
+SETTINGS = Settings("1:A", ADMIN, "code", ":memory:", Path(__file__).resolve().parent.parent / "data" / "templates")
 GOOD = r"e^{x}\operatorname{\mathrm{tg}}\left(\frac{x}{2}\right)+C"        # mix_exp_trig_01, a = 1
 _ids = itertools.count(1)
 
@@ -60,9 +62,37 @@ def quick_check(kind, user, expected, var, domain):
     return f(user, expected, var, domain, symbolic=False)
 
 
+class InlineGen:
+    """Генератор без процесса: те же ответы, считает вызовы (процесс проверяет test_genpool)."""
+    busy = False
+
+    def __init__(self):
+        self.calls = []
+
+    async def instance(self, tpl, seed):
+        self.calls.append("instance")
+        return generate(tpl, seed)
+
+    async def hints(self, inst, direct):
+        self.calls.append("hints")
+        return answer_hints(inst, direct)
+
+    async def blitz_tasks(self, bank, seed):
+        self.calls.append("blitz")
+        return BlitzRun(bank, seed=seed).tasks
+
+
+class FakeStock:
+    resets = 0
+
+    def reset(self):
+        self.resets += 1
+
+
 class World:
     def __init__(self, db, bot):
         self.db, self.bot = db, bot
+        self.gen, self.stock = InlineGen(), FakeStock()
 
     async def task(self, uid=STUDENT, tid="mix_exp_trig_01", params=None, direct=True):
         inst = build(BANK[tid], params or {"a": 1})
@@ -85,7 +115,7 @@ class World:
             raw = json.dumps({"v": 1, "latex": web}) if web is not None else kw.get("raw")
             fields = {"web_app_data": WebAppData(data=raw, button_text="x")} if raw is not None else {"text": kw["text"]}
             upd = Update(update_id=next(_ids), message=msg(**fields))
-        await DP.feed_update(self.bot, upd, db=self.db, bank=BANK, settings=SETTINGS, ocr=None)
+        await DP.feed_update(self.bot, upd, db=self.db, bank=BANK, settings=SETTINGS, ocr=None, gen=self.gen, stock=self.stock)
 
     async def attempts(self):
         async with self.db.conn.execute("SELECT raw_input, verdict, input_method, ocr_raw FROM attempts") as cur:

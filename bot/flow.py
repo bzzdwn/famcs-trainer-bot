@@ -254,10 +254,26 @@ class TrainSession:
             self._hidden = self._to_hide()
         return hint
 
+    @property
+    def direct(self) -> bool:
+        return self._direct
+
+    @property
+    def needs_answer_hints(self) -> bool:
+        """Для следующей подсказки нужна лестница финала, а её ещё нет: бот считает её в процессе-генераторе."""
+        return not self.finished and self._on_final() and (
+            self._answer_hints is None or self._answer_hints[0] != self._direct)
+
+    def set_answer_hints(self, direct: bool, hints: tuple[Hint, ...]) -> None:
+        self._answer_hints = (direct, hints)
+
+    def _on_final(self) -> bool:
+        return not self._in_method and (self._direct or self._cp.type == "antiderivative")
+
     def _ladder(self) -> tuple[Hint, ...]:
-        if not self._in_method and (self._direct or self._cp.type == "antiderivative"):
-            if self._answer_hints is None or self._answer_hints[0] != self._direct:
-                self._answer_hints = (self._direct, answer_hints(self.inst, self._direct))
+        if self._on_final():
+            if self.needs_answer_hints:
+                self.set_answer_hints(self._direct, answer_hints(self.inst, self._direct))
             return self._answer_hints[1]
         texts = [t for t in [self._method.hint if self._in_method else self._cp.hint] if t]
         if self.current().kind == "buttons" and self._to_hide():

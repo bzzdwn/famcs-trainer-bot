@@ -20,6 +20,7 @@ from bot.config import Settings
 from bot.db import DB
 from bot.flow import HIDE_TEXT, Outcome, TrainSession
 from bot.formula import FormulaError, formula_keyboard, parse_webapp_data
+from bot.genpool import GEN_FAILED, GenError, GenPool
 from bot.ocr import OcrError, YandexOcr
 from bot.photo import OCR_DAILY_LIMIT, photo_attempt_fields, pick_photo_size
 from bot.render import render_options, render_or_text
@@ -27,7 +28,7 @@ from bot.topics import (ANY_LEVEL, MIX, available, build_method_step, mix_levels
                         topic_title)
 from bot.waiting import waiting
 from core.checker import check_with_timeout
-from core.generator import Instance, generate
+from core.generator import Instance
 from core.latex_input import Unreadable, latex_to_input
 from core.templates import Template
 
@@ -231,7 +232,7 @@ async def close_current(chat_id: int, db: DB) -> bool:
 
 
 @router.callback_query(F.data.startswith("l:") | F.data.startswith("next:"))
-async def cb_level(cb: CallbackQuery, db: DB, bank: dict[str, Template]):
+async def cb_level(cb: CallbackQuery, db: DB, bank: dict[str, Template], gen: GenPool):
     _, topic, level = cb.data.split(":")
     await cb.answer()
     if not await require_student(cb.message, db, cb.from_user.id):
@@ -241,11 +242,15 @@ async def cb_level(cb: CallbackQuery, db: DB, bank: dict[str, Template]):
     if tpl is None:
         await cb.message.answer("По этой теме и уровню пока нет задач.")
         return
-    await close_current(cb.message.chat.id, db)
-    from bot.handlers.blitz import cancel_blitz       # ленивый импорт: train ↔ blitz
-    cancel_blitz(cb.message.chat.id)
     async with waiting(cb.message, "Готовлю задачу…"):
-        inst = await asyncio.to_thread(generate, tpl, secrets.randbits(32))
+        try:
+            inst = await gen.instance(tpl, secrets.randbits(32))
+        except GenError:                              # прошлую задачу не закрываем: новой нет
+            await cb.message.answer(GEN_FAILED, reply_markup=kb([btn("Ещё раз", cb.data)]))
+            return
+        await close_current(chat, db)
+        from bot.handlers.blitz import cancel_blitz   # ленивый импорт: train ↔ blitz
+        cancel_blitz(chat)
         iid = await db.save_instance(inst, tpl.topic, tpl.difficulty)
         OFFERED[chat] = Offered(inst, iid, topic, level, tpl.difficulty)
         LAST_TPL[chat] = tpl.id
@@ -458,13 +463,20 @@ async def on_photo(message: Message, db: DB, ocr: YandexOcr | None):
 
 
 @router.callback_query(F.data == "hint")
-async def cb_hint(cb: CallbackQuery):
+async def cb_hint(cb: CallbackQuery, gen: GenPool):
     a = await active_or_stale(cb)
     if not a:
         return
     await cb.answer()
     reveal = kb([btn("Показать ответ", "reveal")])
-    hint = await asyncio.to_thread(a.session.take_hint)          # первообразная по t считается доли секунды
+    if a.session.needs_answer_hints:                              # sympy — только в процессе-генераторе
+        direct = a.session.direct
+        try:
+            a.session.set_answer_hints(direct, await gen.hints(a.session.inst, direct))
+        except GenError:
+            await cb.message.answer("Не получилось подготовить подсказку. Нажми ещё раз.", reply_markup=kb(HINT_ROW))
+            return
+    hint = a.session.take_hint()
     if hint is None:
         await cb.message.answer("Подсказок больше нет.", reply_markup=reveal)
         return

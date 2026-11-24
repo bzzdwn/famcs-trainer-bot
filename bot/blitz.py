@@ -71,9 +71,6 @@ class BlitzRun:
                  time_limit: float = TIME_LIMIT):
         """Серия из size задач по шаблонам с blitz_method; без повторов, пока шаблонов хватает.
         Различных методов < N_OPTIONS → ValueError."""
-        if time_limit not in TIME_CHOICES:
-            raise ValueError(f"время на карточку {time_limit} — не из {TIME_CHOICES}")
-        self._time_limit = time_limit
         eligible = sorted((t for t in bank.values() if t.blitz_method), key=lambda t: t.id)
         methods = sorted({t.blitz_method for t in eligible})
         if len(methods) < N_OPTIONS:
@@ -91,8 +88,20 @@ class BlitzRun:
             opts = rng.sample([m for m in methods if m not in valid], N_OPTIONS - 1) + [tpl.blitz_method]
             rng.shuffle(opts)
             tasks.append(BlitzTask(tpl.id, inst, tpl.blitz_method, tuple(opts), tpl.checkpoints[0].hint))
-        self._tasks = tuple(tasks)
+        self._setup(tuple(tasks), time_limit)
+
+    def _setup(self, tasks: tuple[BlitzTask, ...], time_limit: float) -> None:
+        if time_limit not in TIME_CHOICES:
+            raise ValueError(f"время на карточку {time_limit} — не из {TIME_CHOICES}")
+        self._tasks, self._time_limit = tasks, time_limit
         self._answers: list[BlitzAnswer] = []
+
+    @classmethod
+    def from_tasks(cls, tasks: tuple[BlitzTask, ...], time_limit: float = TIME_LIMIT) -> "BlitzRun":
+        """Серия из готовых задач (запас): время на карточку от задач не зависит."""
+        run = cls.__new__(cls)
+        run._setup(tuple(tasks), time_limit)
+        return run
 
     @property
     def time_limit(self) -> float:

@@ -12,6 +12,7 @@ from bot import commands
 from bot.bank import reload_bank
 from bot.config import load_settings
 from bot.db import DB
+from bot.genpool import BlitzStock, GenPool
 from bot.ocr import YandexOcr
 from bot.handlers import admin, blitz, me, start, train
 from core.checker import check_with_timeout, shutdown_pool
@@ -19,9 +20,11 @@ from core.templates import load_templates
 
 
 
-async def reload_on_signal(bot: Bot, bank: dict, settings) -> None:
+async def reload_on_signal(bot: Bot, bank: dict, settings, stock: BlitzStock) -> None:
     """SIGHUP (deploy.sh --templates): перечитать шаблоны без рестарта и сообщить админу."""
     ok, msg = await asyncio.to_thread(reload_bank, bank, settings.templates_dir)
+    if ok:
+        stock.reset()                                # серии блица собраны по старым шаблонам
     logging.info("SIGHUP: перезагрузка шаблонов: %s %s", ok, msg)
     try:
         await bot.send_message(settings.admin_tg_id,
@@ -44,7 +47,9 @@ async def main() -> None:
     ocr = YandexOcr(settings.yandex_api_key, settings.yandex_folder_id) \
         if settings.yandex_api_key and settings.yandex_folder_id else None
     logging.info("фото-ввод: %s", "включён" if ocr else "выключен (нет YANDEX_API_KEY / YANDEX_FOLDER_ID)")
-    dp = Dispatcher(storage=MemoryStorage(), db=db, bank=bank, settings=settings, ocr=ocr)
+    gen = GenPool()                                  # sympy-генерация — в отдельном процессе
+    stock = BlitzStock(gen, bank)
+    dp = Dispatcher(storage=MemoryStorage(), db=db, bank=bank, settings=settings, ocr=ocr, gen=gen, stock=stock)
     dp.include_routers(admin.make_router(settings.admin_tg_id), start.router, blitz.router, me.router,
                        train.router)   # train последним: в нём перехват любого текста
     await commands.set_default(bot)                     # гости: /start, /help
@@ -53,12 +58,15 @@ async def main() -> None:
                                 admin=True)
     try:
         asyncio.get_running_loop().add_signal_handler(
-            signal.SIGHUP, lambda: asyncio.create_task(reload_on_signal(bot, bank, settings)))
+            signal.SIGHUP, lambda: asyncio.create_task(reload_on_signal(bot, bank, settings, stock)))
     except (NotImplementedError, AttributeError):    # Windows: сигналов нет — только /reload
         pass
+    refill = asyncio.create_task(stock.keep_full())
     try:
         await dp.start_polling(bot)
     finally:
+        refill.cancel()
+        await asyncio.to_thread(gen.close)
         await db.close()
         await asyncio.to_thread(shutdown_pool)
 
