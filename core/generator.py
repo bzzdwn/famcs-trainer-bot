@@ -31,6 +31,7 @@ class CheckpointInstance:
     reference: str | None = None
     distractors: tuple[str, ...] = ()  # ровно N_DISTRACTORS для expr / transformed_integrand
     skippable: bool = False
+    substitution: str | None = None    # transformed_integrand: чему равна новая переменная (для подсказок)
 
 
 @dataclass(frozen=True)
@@ -190,6 +191,7 @@ def build(tpl: Template, params: dict[str, int]) -> Instance:
             options=cp.options, correct=cp.correct, expected=expected,
             reference=str(_ev(cp.reference, params, x)) if cp.reference else None,
             distractors=distractors, skippable=cp.skippable,
+            substitution=str(_ev(cp.substitution, params, x)) if cp.substitution else None,
         ))
     return Instance(
         template_id=tpl.id, params=dict(params), integrand=str(f),

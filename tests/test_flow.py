@@ -161,19 +161,20 @@ def test_preview():
 
 def test_hint():
     inst, s = session()
-    assert s.take_hint() == inst.checkpoints[0].hint
+    assert s.take_hint().text == inst.checkpoints[0].hint
     out = s.answer_button(correct_button(s, inst))
-    assert out.log["hint_used"] is True
+    assert out.log["hint_used"] == 1
     out = s.answer_button(correct_button(s, inst))
-    assert out.log["hint_used"] is False         # подсказка не «перетекает» на следующую точку
+    assert out.log["hint_used"] == 0         # подсказка не «перетекает» на следующую точку
     assert s.summary().hints == 1
 
 
-def test_no_hint():
+def test_final_answer_has_hint():
     inst, s = session("int_parts_poly_exp_01")
-    s.answer_button(correct_button(s, inst))
-    assert s.take_hint() is None                 # у antiderivative нет hint
     assert s.summary().hints == 0
+    s.answer_button(correct_button(s, inst))
+    assert s.take_hint().level == 1              # у финального ответа теперь своя лестница (core.hints)
+    assert s.summary().hints == 1
 
 
 def test_reveal():
@@ -314,9 +315,9 @@ def test_direct_solve(tid):
 
 def test_direct_hint_is_method_hint():
     inst, s = session(direct=True)
-    assert s.take_hint() == inst.checkpoints[0].hint
+    assert s.take_hint().text == inst.checkpoints[0].hint
     out = s.answer_text("x + C")
-    assert out.log["hint_used"] is True
+    assert out.log["hint_used"] == 1
     assert s.summary().hints == 1
 
 
@@ -362,7 +363,7 @@ def test_direct_switch_hint_resets():
     s.take_hint()
     s.switch_to_steps()
     out = s.answer_button(correct_button(s, inst))
-    assert out.log["hint_used"] is False             # подсказка была к финалу, не к выбору замены
+    assert out.log["hint_used"] == 0             # подсказка была к финалу, не к выбору замены
 
 
 def test_switch_errors():
@@ -435,7 +436,7 @@ def test_method_wrong_three_times():
 
 def test_method_hint_and_reveal():
     inst, s = mix_session()
-    assert s.take_hint() == inst.checkpoints[0].hint
+    assert s.take_hint().text == inst.checkpoints[0].hint
     out = s.reveal()
     assert out.answer == "универсальная замена" and out.log["checkpoint_idx"] == METHOD_IDX
     assert s.current().idx == 0

@@ -8,6 +8,7 @@ from typing import Callable
 
 from core.checker import OK, WRONG, Verdict
 from core.generator import Instance
+from core.hints import Hint, answer_hints
 from core.latex import ru_latex
 from core.parser import ParseError, parse_answer, split_constant
 
@@ -19,6 +20,7 @@ REVEALED = "revealed"
 CheckFn = Callable[[str, str, str, str, tuple[float, float]], Verdict]
 
 
+HIDE_TEXT = "Убрал часть неверных вариантов."
 NOTE_METHOD_ALT = "Сработает, но можно короче"
 METHOD_IDX = -1                    # номер шага «метод» в логе: номера шагов шаблона не сдвигаются
 
@@ -41,6 +43,7 @@ class Prompt:
     text: str                      # вопрос точки
     options: tuple[str, ...] = ()  # buttons: подписи (choice) или LaTeX формул (expr / transformed_integrand)
     formulas: bool = False         # True → options — формулы, рисуем карточкой
+    hidden: tuple[int, ...] = ()   # варианты, убранные подсказкой (номера остальных не меняются)
 
 
 @dataclass(frozen=True)
@@ -82,7 +85,10 @@ class TrainSession:
         self._free = free_input
         self._idx = 0
         self._attempts = 0
-        self._hint_pending = False
+        self._seed = seed
+        self._answer_hints: tuple[bool, tuple[Hint, ...]] | None = None   # (direct, уровни) — считаем один раз
+        self._level = 0                        # сколько уровней подсказок взято на текущем шаге
+        self._hidden: tuple[int, ...] = ()     # неверные варианты, убранные подсказкой
         self._hints: set[int] = set()
         self._results: list[str] = []          # first_try | later | revealed | skipped
         self._dropped = False
@@ -125,11 +131,12 @@ class TrainSession:
             return Prompt("done", self._idx, "", "")
         if self._in_method:
             m = self._method
-            return Prompt("buttons", METHOD_IDX, "method", m.prompt, m.options)
+            return Prompt("buttons", METHOD_IDX, "method", m.prompt, m.options, hidden=self._hidden)
         cp = self._cp
         if self._idx in self._buttons:
             labels = self._buttons[self._idx][0]
-            return Prompt("buttons", self._idx, cp.type, cp.prompt, labels, formulas=cp.type != "choice")
+            return Prompt("buttons", self._idx, cp.type, cp.prompt, labels, formulas=cp.type != "choice",
+                          hidden=self._hidden)
         return Prompt("input", self._idx, cp.type, cp.prompt)
 
     def _ensure(self, kind: str) -> None:
@@ -153,12 +160,15 @@ class TrainSession:
             self._results.append(result)
             self._in_method = False
             self._attempts = self._final_attempts if self._idx == self._final else 0
-            self._hint_pending = False
+            self._reset_hints()
             return
         self._results.append(result)
         self._idx = len(self.inst.checkpoints) if self._direct else self._idx + 1
         self._attempts = self._final_attempts if self._idx == self._final else 0
-        self._hint_pending = False
+        self._reset_hints()
+
+    def _reset_hints(self) -> None:
+        self._level, self._hidden = 0, ()
 
     def _where(self) -> tuple[int, str]:
         """(номер для лога, тип) текущего шага."""
@@ -170,7 +180,7 @@ class TrainSession:
         attempt_no = self._attempts + 1
         log = {"checkpoint_idx": idx, "checkpoint_type": ctype, "raw_input": raw,
                "verdict": verdict.status, "input_method": method,
-               "hint_used": self._hint_pending, "attempt_no": attempt_no}
+               "hint_used": self._level, "attempt_no": attempt_no}
         if verdict.status == OK:
             self._attempts += 1
             self._advance("first_try" if self._attempts == 1 else "later")
@@ -192,6 +202,8 @@ class TrainSession:
     def answer_button(self, i: int) -> Outcome:
         """Нажата кнопка i (0-based) на текущей точке."""
         self._ensure("buttons")
+        if i in self._hidden:
+            raise ValueError(f"вариант {i} убран подсказкой")
         if self._in_method:
             m = self._method
             if not 0 <= i < len(m.options):
@@ -227,20 +239,42 @@ class TrainSession:
         verdict = self._check(cp.type, raw, expected, cp.var, cp.domain)
         return self._register(verdict, raw, input_method)
 
-    def take_hint(self) -> str | None:
-        """Подсказка текущей точки (отмечается в логе следующей попытки).
-        В «Сразу ответ» — подсказка первой точки (про метод)."""
+    def take_hint(self) -> Hint | None:
+        """Следующий уровень подсказки текущего шага; None — больше нет. Номер уровня идёт в лог попыток.
+        Варианты кнопками: подсказка шаблона → убрать часть неверных. Финал (и «Сразу ответ») — core.hints."""
         if self.finished:
             return None
-        if self._in_method:
-            hint = self._method.hint
-        else:
-            hint = self.inst.checkpoints[0].hint if self._direct else self._cp.hint
-        if not hint:
+        ladder = self._ladder()
+        if self._level >= len(ladder):
             return None
-        self._hint_pending = True
+        hint = ladder[self._level]
+        self._level += 1
         self._hints.add(self._where()[0])
+        if hint.text == HIDE_TEXT:
+            self._hidden = self._to_hide()
         return hint
+
+    def _ladder(self) -> tuple[Hint, ...]:
+        if not self._in_method and (self._direct or self._cp.type == "antiderivative"):
+            if self._answer_hints is None or self._answer_hints[0] != self._direct:
+                self._answer_hints = (self._direct, answer_hints(self.inst, self._direct))
+            return self._answer_hints[1]
+        texts = [t for t in [self._method.hint if self._in_method else self._cp.hint] if t]
+        if self.current().kind == "buttons" and self._to_hide():
+            texts.append(HIDE_TEXT)
+        return tuple(Hint(i, t, last=i == len(texts)) for i, t in enumerate(texts, 1))
+
+    def _to_hide(self) -> tuple[int, ...]:
+        """Какие неверные варианты убрать: остаётся треть (не меньше одного). Рабочие альтернативы не трогаем."""
+        if self._in_method:
+            m = self._method
+            wrong = [i for i, o in enumerate(m.options) if o != m.correct and o not in m.alternatives]
+        else:
+            labels, _, correct = self._buttons[self._idx]
+            wrong = [i for i in range(len(labels)) if i not in correct]
+        keep = max(1, len(wrong) // 3)
+        random.Random(f"{self._seed}:{self._where()[0]}:hide").shuffle(wrong)
+        return tuple(sorted(wrong[keep:]))
 
     def reveal(self) -> Outcome:
         """«Показать ответ и идти дальше»."""
@@ -249,7 +283,7 @@ class TrainSession:
         (idx, ctype), answer, attempt_no = self._where(), self._answer(), self._attempts + 1
         log = {"checkpoint_idx": idx, "checkpoint_type": ctype, "raw_input": "",
                "verdict": REVEALED, "input_method": "button",
-               "hint_used": self._hint_pending, "attempt_no": attempt_no}
+               "hint_used": self._level, "attempt_no": attempt_no}
         self._advance(REVEALED)
         return Outcome(Verdict(REVEALED), False, attempt_no, True, answer=answer, log=log)
 
@@ -282,7 +316,7 @@ class TrainSession:
         self._idx = 0
         self._in_method = self._method_asked = self._method is not None
         self._attempts = self._final_attempts if self._final == 0 and not self._in_method else 0
-        self._hint_pending = False
+        self._reset_hints()
 
     def summary(self) -> Summary:
         r = self._results

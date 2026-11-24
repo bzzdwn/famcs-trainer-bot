@@ -1196,6 +1196,7 @@
       hint: "x — логарифм t с коэффициентом, в dx появляется 1/t."
     - type: antiderivative
       prompt: "Ответ (с +C)"
+      hint: "Разбей дробь: 1/(t²(1 + t²)) = 1/t² − 1/(1 + t²). Первое слагаемое — по частям (u = arctg t), второе — arctg t d(arctg t)."
       reference: "x - m*log(1 + exp(2*x/m))/2 - m*exp(-x/m)*atan(exp(x/m)) - m*atan(exp(x/m))**2/2"
       domain: [-2.0, 2.0]
   blitz_method: "замена t = eˣ"
@@ -1267,6 +1268,7 @@
       hint: "1 − th²x = 1/ch²x = (th x)′."
     - type: antiderivative
       prompt: "Ответ (с +C)"
+      hint: "Домножь и раздели на корень: числитель t² + const перепиши через 1 − t², получатся табличный интеграл и интеграл с корнем и 1 − t² в знаменателе."
       reference: "-log(tanh(x) + sqrt(c + tanh(x)**2))
         + sqrt(1 + c)/2*log((sqrt(c + tanh(x)**2) + sqrt(1 + c)*tanh(x))/(sqrt(c + tanh(x)**2) - sqrt(1 + c)*tanh(x)))"
       domain: [-1.4, 1.4]

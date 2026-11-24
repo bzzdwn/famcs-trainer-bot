@@ -18,7 +18,7 @@ from aiogram.types import (BufferedInputFile, CallbackQuery, InlineKeyboardButto
 
 from bot.config import Settings
 from bot.db import DB
-from bot.flow import Outcome, TrainSession
+from bot.flow import HIDE_TEXT, Outcome, TrainSession
 from bot.formula import FormulaError, formula_keyboard, parse_webapp_data
 from bot.ocr import OcrError, YandexOcr
 from bot.photo import OCR_DAILY_LIMIT, photo_attempt_fields, pick_photo_size
@@ -83,6 +83,17 @@ def kb(*rows: list[InlineKeyboardButton]) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[r for r in rows if r])
 
 
+HINT_ROW = [btn("💡 Подсказка", "hint")]               # есть с начала любого шага
+
+
+def answer_rows(p) -> list[list[InlineKeyboardButton]]:
+    """Кнопки вариантов; убранные подсказкой пропускаем, номера остальных прежние."""
+    shown = [i for i in range(len(p.options)) if i not in p.hidden]
+    if p.formulas:
+        return [[btn(str(i + 1), f"b:{i}") for i in shown]]
+    return [[btn(p.options[i], f"b:{i}")] for i in shown]
+
+
 def help_rows(a: Active) -> list[list[InlineKeyboardButton]]:
     rows = [[btn("💡 Подсказка", "hint"), btn("Показать ответ", "reveal")]]
     if a.session.direct:
@@ -108,13 +119,9 @@ async def show_prompt(message: Message, a: Active, db: DB, after_wrong: bool = F
     if p.kind == "done":
         await finish(message, a, db)
         return
-    extra = help_rows(a) if after_wrong else []
+    extra = help_rows(a) if after_wrong else [HINT_ROW]
     if p.kind == "buttons":
-        if p.formulas:
-            options = [[btn(str(i + 1), f"b:{i}") for i in range(len(p.options))]]
-        else:
-            options = [[btn(o, f"b:{i}")] for i, o in enumerate(p.options)]
-        markup = kb(*options, *extra, EXIT_ROW)
+        markup = kb(*answer_rows(p), *extra, EXIT_ROW)
         if p.formulas:
             card = await asyncio.to_thread(render_options, list(p.options))
             await message.answer_photo(BufferedInputFile(card, "options.png"), caption=escape(p.text),
@@ -455,9 +462,21 @@ async def cb_hint(cb: CallbackQuery):
     a = await active_or_stale(cb)
     if not a:
         return
-    hint = a.session.take_hint()
     await cb.answer()
-    await cb.message.answer(f"💡 {escape(hint)}" if hint else "Для этого шага подсказки нет.")
+    reveal = kb([btn("Показать ответ", "reveal")])
+    hint = await asyncio.to_thread(a.session.take_hint)          # первообразная по t считается доли секунды
+    if hint is None:
+        await cb.message.answer("Подсказок больше нет.", reply_markup=reveal)
+        return
+    more = reveal if hint.last else kb([btn("💡 Ещё подсказка", "hint")])
+    text = f"💡 {escape(hint.text)}"
+    if hint.text == HIDE_TEXT:
+        p = a.session.current()
+        await cb.message.answer(text + " Остались:", reply_markup=kb(*answer_rows(p), *reveal.inline_keyboard, EXIT_ROW))
+    elif hint.latex:
+        await send_formula(cb.message, hint.latex, caption=text, markup=more)
+    else:
+        await cb.message.answer(text, reply_markup=more)
 
 
 @router.callback_query(F.data == "reveal")
