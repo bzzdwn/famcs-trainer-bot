@@ -151,6 +151,9 @@ def _components(F: sp.Expr) -> str:
 
 def answer_hints(inst: Instance, direct: bool = False) -> tuple[Hint, ...]:
     """Уровни для финальной точки. direct — «Сразу ответ»: студент не видел промежуточных шагов."""
+    if inst.limit_hints is not None:
+        ladder = inst.limit_hints[direct]
+        return tuple(Hint(i, text, latex, i == len(ladder)) for i, (text, latex) in enumerate(ladder, 1))
     k = next(i for i, c in enumerate(inst.checkpoints) if c.type == "antiderivative")
     cp, before = inst.checkpoints[k], inst.checkpoints[:k]
     mid = next((c for c in reversed(before) if c.type in ("expr", "transformed_integrand")), None)

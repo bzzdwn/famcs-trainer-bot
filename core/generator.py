@@ -32,6 +32,11 @@ class CheckpointInstance:
     distractors: tuple[str, ...] = ()  # ровно N_DISTRACTORS для expr / transformed_integrand
     skippable: bool = False
     substitution: str | None = None    # transformed_integrand: чему равна новая переменная (для подсказок)
+    role: str | None = None            # предел: type | reduce | lhopital | value
+    alternatives: tuple[str, ...] = () # reduce: верно, но длиннее
+    labels: dict[str, str] | None = None  # вариант → LaTeX, если показывать надо дробью, а не как её сворачивает sympy
+    dead: tuple[str, ...] = ()         # reduce: верно, но неопределённость не исчезнет
+    traps: dict[str, str] | None = None   # value: типичное неверное значение → диагноз
 
 
 @dataclass(frozen=True)
@@ -39,8 +44,10 @@ class Instance:
     template_id: str
     params: dict[str, int]
     integrand: str
-    statement_latex: str
+    statement_latex: str               # для предела integrand — функция под знаком предела
     checkpoints: tuple[CheckpointInstance, ...]
+    steps: bool = True                 # False — только «Сразу ответ»
+    limit_hints: tuple | None = None   # предел: (подсказки финала «По шагам», «Сразу ответ»), каждая — (текст, LaTeX)
 
 
 # --- вычисление формул шаблона ------------------------------------------------
@@ -106,7 +113,11 @@ def _expect_equal(a, b, var, domain, tpl, params, what):
 
 def self_check(tpl: Template, params: dict[str, int]) -> None:
     """reference' == integrand; h(g(x))·g'(x) == integrand; expected == same_as (integrand или формула).
-    Нарушение → GenerationError с описанием."""
+    Нарушение → GenerationError с описанием. Предел — core.limit_build."""
+    if tpl.limit:
+        from core.limit_build import self_check_limit
+        self_check_limit(tpl, params)
+        return
     x = tpl.var
     xs = sp.Symbol(x, real=True)
     f = _ev(tpl.integrand, params, x, real=True)
@@ -136,6 +147,10 @@ def check_example(tpl: Template, ex) -> None:
     """Номер из книги: шаблон при ex.params проходит самопроверку, а ответ книги — первообразная integrand.
     Расхождение → GenerationError (значит, опечатка в шаблоне или в переносе ответа)."""
     self_check(tpl, ex.params)
+    if tpl.limit:
+        from core.limit_build import check_limit_example
+        check_limit_example(tpl, ex)
+        return
     x = tpl.var
     xs = sp.Symbol(x, real=True)
     f = _ev(tpl.integrand, ex.params, x, real=True)
@@ -172,6 +187,9 @@ def _fill(statement: str, params: dict[str, int]) -> str:
 
 def build(tpl: Template, params: dict[str, int]) -> Instance:
     """Детерминированная сборка экземпляра по параметрам (для восстановления из БД)."""
+    if tpl.limit:
+        from core.limit_build import build_limit
+        return build_limit(tpl, params)
     x = tpl.var
     f = _ev(tpl.integrand, params, x)
     cps = []

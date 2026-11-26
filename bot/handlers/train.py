@@ -18,17 +18,18 @@ from aiogram.types import (BufferedInputFile, CallbackQuery, InlineKeyboardButto
 
 from bot.config import Settings
 from bot.db import DB
-from bot.flow import HIDE_TEXT, Outcome, TrainSession
+from bot.flow import HIDE_TEXT, NOT_SPENT, Outcome, TrainSession
 from bot.formula import FormulaError, formula_keyboard, parse_webapp_data
 from bot.genpool import GEN_FAILED, GenError, GenPool
 from bot.ocr import OcrError, YandexOcr
 from bot.photo import OCR_DAILY_LIMIT, photo_attempt_fields, pick_photo_size
 from bot.render import render_options, render_or_text
-from bot.topics import (ANY_LEVEL, MIX, available, build_method_step, mix_levels, pick_template,
-                        topic_title)
+from bot.topics import (ANY_LEVEL, SECTION_NAMES, available, build_method_step, is_mix, mix_key, mix_levels,
+                        pick_template, section_of, sections, topic_title)
 from bot.waiting import waiting
 from core.checker import check_with_timeout
 from core.generator import Instance
+from core.limits import TYPES
 from core.latex_input import Unreadable, latex_to_input
 from core.templates import Template
 
@@ -66,8 +67,8 @@ OFFERED: dict[int, Offered] = {}
 LAST_TPL: dict[int, str] = {}      # chat → id прошлого шаблона: не повторяем подряд
 
 
-def bot_check(kind, user, expected, var, domain):
-    return check_with_timeout(kind, user, expected, var, domain)
+def bot_check(kind, user, expected, var, domain, **extra):
+    return check_with_timeout(kind, user, expected, var, domain, **extra)
 
 
 # --- клавиатуры ------------------------------------------------------------
@@ -90,6 +91,10 @@ HINT_ROW = [btn("💡 Подсказка", "hint")]               # есть с 
 def answer_rows(p) -> list[list[InlineKeyboardButton]]:
     """Кнопки вариантов; убранные подсказкой пропускаем, номера остальных прежние."""
     shown = [i for i in range(len(p.options)) if i not in p.hidden]
+    if p.options[:len(TYPES)] == TYPES:                # типы неопределённости: 4 + 3 + «нет неопределённости»
+        short = [btn(p.options[i], f"b:{i}") for i in shown if i < len(TYPES)]
+        return [short[k:k + 4] for k in range(0, len(short), 4)] + [
+            [btn(p.options[i], f"b:{i}")] for i in shown if i >= len(TYPES)]
     if p.formulas:
         return [[btn(str(i + 1), f"b:{i}") for i in shown]]
     return [[btn(p.options[i], f"b:{i}")] for i in shown]
@@ -97,7 +102,7 @@ def answer_rows(p) -> list[list[InlineKeyboardButton]]:
 
 def help_rows(a: Active) -> list[list[InlineKeyboardButton]]:
     rows = [[btn("💡 Подсказка", "hint"), btn("Показать ответ", "reveal")]]
-    if a.session.direct:
+    if a.session.direct and a.session.inst.steps:
         rows.append([btn("Решать по шагам", "steps")])
     return rows
 
@@ -124,15 +129,21 @@ async def show_prompt(message: Message, a: Active, db: DB, after_wrong: bool = F
     if p.kind == "buttons":
         markup = kb(*answer_rows(p), *extra, EXIT_ROW)
         if p.formulas:
-            card = await asyncio.to_thread(render_options, list(p.options))
+            card = await asyncio.to_thread(render_options, list(p.options), p.context)
             await message.answer_photo(BufferedInputFile(card, "options.png"), caption=escape(p.text),
                                        reply_markup=markup)
+        elif p.context:                                # «какой тип теперь?» — у этой дроби
+            await send_formula(message, p.context, caption=escape(p.text), markup=markup)
         else:
             await message.answer(escape(p.text), reply_markup=markup)
     else:
         text = "Введи ещё раз или возьми подсказку." if after_wrong else \
             escape(p.text) + "\n<i>Введи ответ сообщением, в редакторе или пришли фото формулы.</i>"
-        await message.answer(text, reply_markup=kb(EDITOR_ROW, *extra, EXIT_ROW))
+        markup = kb(EDITOR_ROW, *extra, EXIT_ROW)
+        if p.context and not after_wrong:
+            await send_formula(message, p.context, caption=text, markup=markup)
+        else:
+            await message.answer(text, reply_markup=markup)
 
 
 async def finish(message: Message, a: Active, db: DB):
@@ -143,7 +154,7 @@ async def finish(message: Message, a: Active, db: DB):
     if sm.revealed:
         lines.append(f"Ответ показан: {sm.revealed}.")
     await message.answer("\n".join(lines), reply_markup=kb(
-        [btn("Следующая задача", f"next:{a.topic}:{a.level}")], [btn("Другая тема", "menu")]))
+        [btn("Следующая задача", f"next:{a.topic}:{a.level}")], [btn("Другая тема", f"s:{section_of(a.topic)}")]))
 
 
 async def log(db: DB, a: Active, out: Outcome, **extra) -> int | None:
@@ -160,14 +171,14 @@ async def react(message: Message, a: Active, db: DB, out: Outcome):
         await message.answer("✅ Верно!" + (f"\n<i>{escape(note)}</i>" if note else ""))
         await show_prompt(message, a, db)
         return
-    if status in ("parse_error", "timeout"):
+    if status in NOT_SPENT:
         await message.answer(f"⚠️ {escape(note or 'Не смог проверить')}. Попытка не засчитана, введи ещё раз.")
         return
     if out.moved_on and not out.forced_reveal:          # уровень C, «свой путь»
         await message.answer("Не совпало с эталоном — идём дальше своим путём.")
         await show_prompt(message, a, db)
         return
-    text = "❌ " + escape(note if note and status != "wrong" else DIAG.get(status, "Неверно."))
+    text = "❌ " + escape(note or DIAG.get(status, "Неверно."))
     if out.forced_reveal:
         await message.answer(text + "\nПопытки кончились, вот ответ:")
         await send_answer(message, out.answer, out.log.get("checkpoint_type") in ("choice", "method"))
@@ -194,28 +205,53 @@ async def require_student(message: Message, db: DB, tg_id: int):
     return st
 
 
-async def topics_menu(message: Message, bank: dict[str, Template]):
-    rows = [[btn(topic_title(t), f"t:{t}")] for t in available(bank)] + [[btn(topic_title(MIX), f"t:{MIX}")]]
-    await message.answer("Выбери тему:", reply_markup=kb(*rows))
+def topics_kb(bank: dict[str, Template], section: str) -> InlineKeyboardMarkup:
+    """Темы раздела; «Вразнобой» — если тем больше одной; «Разделы» — если разделов больше одного."""
+    topics = available(bank, section)
+    rows = [[btn(topic_title(t), f"t:{t}")] for t in topics]
+    if len(topics) > 1:
+        rows.append([btn(topic_title(mix_key(section)), f"t:{mix_key(section)}")])
+    if len(sections(bank)) > 1:
+        rows.append([btn("◀ Разделы", "menu")])
+    return kb(*rows)
+
+
+async def main_menu(message: Message, bank: dict[str, Template]):
+    """Раздел → тема → уровень; единственный раздел не спрашиваем."""
+    secs = sections(bank)
+    if len(secs) == 1:
+        await message.answer("Выбери тему:", reply_markup=topics_kb(bank, secs[0]))
+    else:
+        await message.answer("Выбери раздел:", reply_markup=kb(*[[btn(SECTION_NAMES[s], f"s:{s}")] for s in secs]))
 
 
 @router.message(Command("train"))
 async def cmd_train(message: Message, db: DB, bank: dict[str, Template]):
     if await require_student(message, db, message.from_user.id):
-        await topics_menu(message, bank)
+        await main_menu(message, bank)
 
 
 @router.callback_query(F.data == "menu")
 async def cb_menu(cb: CallbackQuery, bank: dict[str, Template]):
     await cb.answer()
-    await topics_menu(cb.message, bank)
+    await main_menu(cb.message, bank)
+
+
+@router.callback_query(F.data.startswith("s:"))
+async def cb_section(cb: CallbackQuery, bank: dict[str, Template]):
+    section = cb.data[2:]
+    if section not in sections(bank):
+        await cb.answer("В этом разделе пока нет задач", show_alert=True)
+        return
+    await cb.answer()
+    await cb.message.answer(f"{SECTION_NAMES[section]}. Выбери тему:", reply_markup=topics_kb(bank, section))
 
 
 @router.callback_query(F.data.startswith("t:"))
 async def cb_topic(cb: CallbackQuery, bank: dict[str, Template]):
     topic = cb.data[2:]
     await cb.answer()
-    levels = mix_levels(bank) if topic == MIX else available(bank).get(topic, [])
+    levels = mix_levels(bank, section_of(topic)) if is_mix(topic) else available(bank).get(topic, [])
     # 4 кнопки «Уровень X» в ряд Telegram обрезает до «Ур…ь X» — слово «уровень» уже в тексте
     row = [btn("Любой" if lv == ANY_LEVEL else lv, f"l:{topic}:{lv}") for lv in levels]
     await cb.message.edit_text(f"{escape(topic_title(topic))}: выбери уровень сложности (A — проще, C — сложнее)",
@@ -257,7 +293,7 @@ async def cb_level(cb: CallbackQuery, db: DB, bank: dict[str, Template], gen: Ge
         # во «Вразнобой» настоящую тему не показываем — она подсказывает метод
         await send_formula(cb.message, inst.statement_latex,
                            caption=f"{escape(topic_title(topic))}, уровень {tpl.difficulty}. Как будешь решать?",
-                           markup=kb([btn("По шагам", "path:steps"), btn("Сразу ответ", "path:direct")], EXIT_ROW))
+                           markup=kb([btn("По шагам", "path:steps")] * inst.steps + [btn("Сразу ответ", "path:direct")], EXIT_ROW))
 
 
 @router.callback_query(F.data.startswith("path:"))
@@ -273,7 +309,7 @@ async def cb_path(cb: CallbackQuery, db: DB, bank: dict[str, Template]):
     await cb.message.edit_reply_markup(reply_markup=None)
     tpl = bank.get(off.inst.template_id)
     # во «Вразнобой» шаги шаблона выдают метод — сначала студент выбирает его сам
-    method_step = build_method_step(bank, tpl) if off.topic == MIX and tpl and tpl.blitz_method else None
+    method_step = build_method_step(bank, tpl) if is_mix(off.topic) and tpl and tpl.blitz_method else None
     session = TrainSession(off.inst, seed=off.instance_id, check=bot_check, free_input=off.difficulty == "C",
                            direct=cb.data == "path:direct", method_step=method_step)
     sid = await db.start_session(st.id, off.instance_id, session.mode)
@@ -291,7 +327,7 @@ async def after_drop(message: Message, chat_id: int, db: DB):
         await message.answer("Сейчас нет задачи. /train — выбрать.")
         return
     await message.answer("Задача закрыта.", reply_markup=kb(
-        [btn("Другая задача этой темы", f"next:{where.topic}:{where.level}")], [btn("Меню тем", "menu")]))
+        [btn("Другая задача этой темы", f"next:{where.topic}:{where.level}")], [btn("Меню тем", f"s:{section_of(where.topic)}")]))
 
 
 @router.callback_query(F.data == "drop")

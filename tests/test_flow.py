@@ -10,7 +10,8 @@ from core.latex import ru_latex
 from core.templates import load_templates, parse_template
 from tests.test_templates import VALID
 
-BANK = load_templates(Path(__file__).resolve().parent.parent / "data" / "templates")
+BANK = {k: t for k, t in load_templates(Path(__file__).resolve().parent.parent / "data" / "templates").items()
+        if not t.limit}  # интегралы; пределы — tests/test_limit_*.py
 UNIVERSAL = "int_trig_universal_01"
 
 
@@ -403,7 +404,7 @@ def test_method_step_first():
     inst, s = mix_session()
     p = s.current()
     assert (p.kind, p.idx, p.cp_type, p.formulas) == ("buttons", METHOD_IDX, "method", False)
-    assert p.options == method_options(BANK)                         # все методы, порядок фиксирован
+    assert p.options == method_options(BANK, "indef_integral")       # все методы раздела, порядок фиксирован
     assert p.text == "Каким методом будешь решать?"
 
 

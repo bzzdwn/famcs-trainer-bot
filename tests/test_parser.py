@@ -143,3 +143,42 @@ def test_parse_error_message_is_human():
     with pytest.raises(ParseError) as e:
         parse_answer("sinx")
     assert str(e.value)  # непустое сообщение для студента
+
+
+# --- числа-великаны не должны вешать бота: превью разбирается в основном процессе ---------------
+
+HUGE = ["9^9^9", "9^9^9^9 + x", "x^(9^9)", "2^(10^8)", "(9^9)^(9^9)", "e^(9^9^9)", "sqrt(9^9^9)", "ln(9^(9^9))",
+        "10^(10^10)", "x^99999", "9^(8+9^9)", "9^(9*9*9*9*9)", "1/9^9^9", "9^-9^9", "((9^99)^99)^99", "9^9^sqrt(99999999)"]
+
+
+@pytest.mark.parametrize("raw", HUGE)
+def test_huge_power_is_rejected_fast(raw):
+    import multiprocessing as mp
+    p = mp.get_context("spawn").Process(target=_expect_parse_error, args=(raw,))     # зависание не должно вешать тесты
+    p.start()
+    p.join(15)
+    alive = p.is_alive()
+    if alive:
+        p.kill()
+    assert not alive, "разбор завис"
+    assert p.exitcode == 0
+
+
+def _expect_parse_error(raw):
+    import sys
+    import time
+
+    from core.parser import ParseError, parse_answer
+    parse_answer("x")                                  # прогрев импорта
+    t0 = time.monotonic()
+    try:
+        parse_answer(raw)
+    except ParseError:
+        sys.exit(0 if time.monotonic() - t0 < 1 else 2)
+    sys.exit(1)
+
+
+@pytest.mark.parametrize("raw", ["x^100", "2^10", "9^9", "x^(1/3)", "e^(-x^2/2)", "(x+1)^20", "2^x", "x^x^x", "x^(2^3)",
+                                 "(1+x)^(1/x)", "10^50", "x^-100", "e^(2x)", "2^(1/2)", "(x^2)^(3/2)"])
+def test_ordinary_powers_still_work(raw):
+    assert parse_answer(raw) is not None

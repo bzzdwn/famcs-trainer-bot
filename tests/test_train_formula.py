@@ -92,7 +92,7 @@ class FakeStock:
 class World:
     def __init__(self, db, bot):
         self.db, self.bot = db, bot
-        self.gen, self.stock = InlineGen(), FakeStock()
+        self.gen, self.stock, self.bank = InlineGen(), FakeStock(), BANK
 
     async def task(self, uid=STUDENT, tid="mix_exp_trig_01", params=None, direct=True):
         inst = build(BANK[tid], params or {"a": 1})
@@ -115,7 +115,7 @@ class World:
             raw = json.dumps({"v": 1, "latex": web}) if web is not None else kw.get("raw")
             fields = {"web_app_data": WebAppData(data=raw, button_text="x")} if raw is not None else {"text": kw["text"]}
             upd = Update(update_id=next(_ids), message=msg(**fields))
-        await DP.feed_update(self.bot, upd, db=self.db, bank=BANK, settings=SETTINGS, ocr=None, gen=self.gen, stock=self.stock)
+        await DP.feed_update(self.bot, upd, db=self.db, bank=self.bank, settings=SETTINGS, ocr=None, gen=self.gen, stock=self.stock)
 
     async def attempts(self):
         async with self.db.conn.execute("SELECT raw_input, verdict, input_method, ocr_raw FROM attempts") as cur:

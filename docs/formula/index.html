@@ -63,7 +63,7 @@ customElements.whenDefined('math-field').then(() => {
       [wide('sin', '\\sin'), wide('cos', '\\cos'), wide('tg', '\\operatorname{tg}'), wide('ctg', '\\operatorname{ctg}')],
       [wide('arcsin', '\\arcsin'), wide('arccos', '\\arccos'), wide('arctg', '\\operatorname{arctg}'), wide('arcctg', '\\operatorname{arcctg}')],
       [wide('sh', '\\operatorname{sh}'), wide('ch', '\\operatorname{ch}'), wide('th', '\\operatorname{th}'), wide('cth', '\\operatorname{cth}')],
-      ['x', { latex: '#@^{2}', label: 'x²' }, '[left]', '[right]', '[backspace]'],
+      ['x', { latex: '#@^{2}', label: 'x²' }, { latex: '\\infty', label: '∞' }, '[left]', '[right]', '[backspace]'],
     ]},
   ];
   const kbd = document.getElementById('kbd');

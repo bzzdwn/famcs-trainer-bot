@@ -9,7 +9,8 @@ from core.latex import integral_latex, ru_latex
 from core.parser import parse_answer
 from core.templates import load_templates
 
-BANK = load_templates(Path(__file__).resolve().parent.parent / "data" / "templates")
+BANK = {k: t for k, t in load_templates(Path(__file__).resolve().parent.parent / "data" / "templates").items()
+        if not t.limit}  # интегралы; пределы — tests/test_limit_*.py
 x = sp.Symbol("x")
 
 

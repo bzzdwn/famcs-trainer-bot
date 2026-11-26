@@ -68,7 +68,7 @@ class ExportData:
 
 
 CTYPE_RU = {"choice": "выбор", "expr": "выражение", "transformed_integrand": "интеграл после замены",
-            "antiderivative": "ответ", "method": "метод"}
+            "antiderivative": "ответ", "value": "значение", "method": "метод"}
 NOT_ATTEMPT = (*NOT_SPENT, "revealed")       # не тратят попытку
 
 

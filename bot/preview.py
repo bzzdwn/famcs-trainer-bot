@@ -8,7 +8,7 @@ from core.templates import Template
 
 MAX_N = 10
 CTYPE_RU = {"choice": "выбор", "expr": "выражение", "transformed_integrand": "интеграл после замены",
-            "antiderivative": "ответ"}
+            "antiderivative": "ответ", "value": "значение предела"}
 
 
 @dataclass(frozen=True)
@@ -41,8 +41,8 @@ def preview_items(tpl: Template, n: int = 5, seed: int = 0) -> list[PreviewItem]
             elif cp.type == "antiderivative":
                 steps.append(PreviewStep(title, cp.prompt, ru_latex(cp.reference, cp.var) + " + C", (), True))
             else:
-                steps.append(PreviewStep(title, cp.prompt, ru_latex(cp.expected, cp.var),
-                                         tuple(ru_latex(d, cp.var) for d in cp.distractors), True))
+                tex = lambda s: (cp.labels or {}).get(s) or ru_latex(s, cp.var)
+                steps.append(PreviewStep(title, cp.prompt, tex(cp.expected), tuple(map(tex, cp.distractors)), True))
         items.append(PreviewItem(dict(inst.params), inst.statement_latex, tuple(steps)))
     return items
 

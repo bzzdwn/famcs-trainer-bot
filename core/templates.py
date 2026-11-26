@@ -13,8 +13,12 @@ DIFFICULTIES = {"A", "B", "C"}
 DEFAULT_DOMAIN = (-3.0, 3.0)
 
 TOP_KEYS = {"id", "topic", "source", "difficulty", "var", "params", "constraints",
-            "integrand", "statement", "checkpoints", "blitz_method", "method_alternatives", "examples"}
+            "integrand", "statement", "checkpoints", "blitz_method", "method_alternatives", "examples",
+            "limit", "ratio", "product", "diff", "power", "reduce", "reduce_other", "steps", "value"}
 TOP_REQUIRED = {"id", "topic", "difficulty", "var", "integrand", "checkpoints"}
+LIMIT_KINDS = ("ratio", "product", "diff", "power")
+LIMIT_KEYS = {"limit", *LIMIT_KINDS, "reduce", "reduce_other", "steps", "value"}
+LIMIT_REQUIRED = {"id", "topic", "difficulty", "var", "limit"}
 CP_KEYS = {"type", "prompt", "hint", "var", "options", "correct", "expected", "substitution",
            "same_as", "distractors", "skippable", "reference", "domain"}
 CP_REQUIRED = {
@@ -75,6 +79,20 @@ class Example:
 
 
 @dataclass(frozen=True)
+class LimitSpec:
+    """Предел: kind и две части (u/v, u·v, u − v, u^v); точки задачи строит генератор (core.limit_build)."""
+    to: str                            # точка: формула от параметров, "oo", "-oo"
+    side: str                          # "+", "-", "both"
+    kind: str                          # ratio | product | diff | power
+    u: str
+    v: str
+    reduce: tuple[str, str] | None = None            # приведение автора (num, den); для power — дробь для ln y
+    reduce_other: tuple[tuple[str, str], ...] = ()   # другие верные приведения: длиннее или тупиковые
+    steps: bool = True                 # False — только «Сразу ответ»
+    value: str | None = None           # ответ автора, если sympy не справляется
+
+
+@dataclass(frozen=True)
 class Template:
     id: str
     topic: str
@@ -90,6 +108,7 @@ class Template:
     method_alternatives: tuple[str, ...] = ()   # тоже рабочие методы: «Сработает, но можно короче»
     examples: tuple[Example, ...] = ()           # сверка с задачником (tests/test_bank.py)
     file: str = field(default="", compare=False)
+    limit: LimitSpec | None = None               # не None — задача на предел: integrand и checkpoints пустые
 
 
 # --- валидация --------------------------------------------------------------
@@ -201,6 +220,44 @@ def _parse_checkpoint(i: int, raw, tpl_var: str, params: set[str], fail) -> Chec
     )
 
 
+def _parse_limit(raw: dict, var: str, params: set[str], fail) -> LimitSpec:
+    lim = raw["limit"]
+    if not isinstance(lim, dict) or set(lim) != {"to", "side"}:
+        fail("limit: нужны ровно to и side")
+    if lim["side"] not in ("+", "-", "both"):
+        fail("limit.side — «+», «-» или both")
+    _check_formula(lim["to"], params, "limit.to", fail)
+    kinds = [k for k in LIMIT_KINDS if k in raw]
+    if len(kinds) != 1:
+        fail(f"предел: нужно ровно одно из {list(LIMIT_KINDS)}")
+    kind = kinds[0]
+
+    def pair(value, what: str) -> tuple[str, str]:
+        if not isinstance(value, list) or len(value) != 2:
+            fail(f"{what}: ожидались две формулы")
+        for f in value:
+            _check_formula(f, params | {var}, what, fail)
+        return value[0], value[1]
+
+    u, v = pair(raw[kind], kind)
+    steps = raw.get("steps", True)
+    if not isinstance(steps, bool):
+        fail("steps — true или false")
+    if kind == "ratio" and ("reduce" in raw or "reduce_other" in raw):
+        fail("reduce для отношения не нужен")
+    if kind != "ratio" and steps and "reduce" not in raw:
+        fail(f"{kind}: нужно reduce (приведение к дроби) или steps: false")
+    other = raw.get("reduce_other", [])
+    if not isinstance(other, list):
+        fail("reduce_other: ожидался список пар")
+    value = raw.get("value")
+    if value is not None:
+        _check_formula(value, params, "value", fail)
+    return LimitSpec(to=lim["to"], side=lim["side"], kind=kind, u=u, v=v,
+                     reduce=pair(raw["reduce"], "reduce") if "reduce" in raw else None,
+                     reduce_other=tuple(pair(o, "reduce_other") for o in other), steps=steps, value=value)
+
+
 def parse_template(raw: dict, source: str = "<dict>") -> Template:
     """dict из YAML → Template. Любая ошибка формата → TemplateError."""
     tid = raw.get("id", "?") if isinstance(raw, dict) else "?"
@@ -213,9 +270,13 @@ def parse_template(raw: dict, source: str = "<dict>") -> Template:
     unknown = set(raw) - TOP_KEYS
     if unknown:
         fail(f"неизвестные ключи {sorted(unknown)}")
-    missing = TOP_REQUIRED - set(raw)
+    is_limit = "limit" in raw
+    missing = (LIMIT_REQUIRED if is_limit else TOP_REQUIRED) - set(raw)
     if missing:
         fail(f"нет полей {sorted(missing)}")
+    mixed = set(raw) & ({"integrand", "checkpoints"} if is_limit else LIMIT_KEYS)
+    if mixed:
+        fail(f"поля {sorted(mixed)} не для этого вида задачи")
     if raw["difficulty"] not in DIFFICULTIES:
         fail(f"difficulty должен быть из {sorted(DIFFICULTIES)}")
     var = raw["var"]
@@ -230,7 +291,9 @@ def parse_template(raw: dict, source: str = "<dict>") -> Template:
     params = {name: _parse_param(name, spec, fail) for name, spec in raw_params.items()}
     names = set(params)
 
-    _check_formula(raw["integrand"], names | {var}, "integrand", fail)
+    limit = _parse_limit(raw, var, names, fail) if is_limit else None
+    if not is_limit:
+        _check_formula(raw["integrand"], names | {var}, "integrand", fail)
 
     constraints = tuple(raw.get("constraints") or ())
     for c in constraints:
@@ -240,8 +303,8 @@ def parse_template(raw: dict, source: str = "<dict>") -> Template:
         if extra:
             fail(f"constraints: неизвестные имена {sorted(extra)} в «{c}»")
 
-    cps_raw = raw["checkpoints"]
-    if not isinstance(cps_raw, list) or not cps_raw:
+    cps_raw = [] if is_limit else raw["checkpoints"]
+    if not isinstance(cps_raw, list) or not (cps_raw or is_limit):
         fail("checkpoints: нужен непустой список")
     cps = tuple(_parse_checkpoint(i, cp, var, names, fail) for i, cp in enumerate(cps_raw))
 
@@ -277,10 +340,10 @@ def parse_template(raw: dict, source: str = "<dict>") -> Template:
 
     return Template(
         id=str(raw["id"]), topic=str(raw["topic"]), source=str(raw.get("source", "")),
-        difficulty=raw["difficulty"], var=var, params=params, integrand=raw["integrand"],
+        difficulty=raw["difficulty"], var=var, params=params, integrand=raw.get("integrand", ""),
         checkpoints=cps, constraints=constraints, statement=statement,
         blitz_method=raw.get("blitz_method"), method_alternatives=tuple(alts), examples=tuple(examples),
-        file=source,
+        file=source, limit=limit,
     )
 
 

@@ -4,10 +4,12 @@
 без скобок, |..| → Abs) → белый список символов и имён → parse_expr
 без auto_symbol и без builtins.
 """
+import ast
+import math
 import re
 
 import sympy as sp
-from sympy.parsing.sympy_parser import auto_number, implicit_multiplication, parse_expr
+from sympy.parsing.sympy_parser import auto_number, eval_expr, implicit_multiplication, stringify_expr
 
 MAX_LEN = 300
 
@@ -161,6 +163,60 @@ def _unknown_name_error(name: str, var: str) -> ParseError:
     return ParseError(f"Неизвестное имя «{name}». Переменная здесь — {var}")
 
 
+MAX_EXPONENT = 1000           # x^1001 и больше — не ответ, а способ повесить бота (9^9^9)
+MAX_DIGITS = 2000             # и число-степень не длиннее стольких цифр
+
+
+class _TooBig(Exception):
+    pass
+
+
+def _magnitude(node: ast.AST) -> float | None:
+    """Грубое значение числовой части дерева до вычисления; None — есть переменная или функция.
+    Слишком большая степень где угодно → _TooBig. Сами степени не вычисляем."""
+    if isinstance(node, ast.Expression):
+        return _magnitude(node.body)
+    if isinstance(node, ast.Constant):
+        try:
+            return float(node.value)
+        except (TypeError, ValueError, OverflowError):
+            return None
+    if isinstance(node, ast.UnaryOp):
+        v = _magnitude(node.operand)
+        return None if v is None else -v if isinstance(node.op, ast.USub) else v
+    if isinstance(node, ast.BinOp):
+        a, b = _magnitude(node.left), _magnitude(node.right)
+        if isinstance(node.op, ast.Pow):
+            if b is not None and abs(b) > MAX_EXPONENT:
+                raise _TooBig
+            if a is None or b is None:
+                return None
+            if a and abs(b) * abs(math.log10(abs(a))) > MAX_DIGITS:
+                raise _TooBig
+        if a is None or b is None:
+            return None
+        try:
+            return {ast.Add: lambda: a + b, ast.Sub: lambda: a - b, ast.Mult: lambda: a * b, ast.Div: lambda: a / b,
+                    ast.Pow: lambda: abs(a) ** b}[type(node.op)]()
+        except (OverflowError, ZeroDivisionError, KeyError):
+            return None if not isinstance(node.op, ast.Pow) else math.inf
+    if isinstance(node, ast.Call):
+        args = [_magnitude(x) for x in node.args]
+        name = getattr(node.func, "id", "")
+        if name in ("Integer", "Float", "Rational"):
+            try:
+                return float(ast.literal_eval(node.args[0]))
+            except (ValueError, TypeError, OverflowError, SyntaxError):
+                return None
+        # exp — тоже степень; корень и прочие функции числа не увеличивают
+        if name == "exp" and args and args[0] is not None and abs(args[0]) > MAX_EXPONENT:
+            raise _TooBig
+        return args[0] if name in ("sqrt", "Abs") and args else None
+    if isinstance(node, ast.Name):
+        return {"pi": math.pi, "e": math.e, "E": math.e}.get(node.id)
+    return None
+
+
 def parse_answer(raw: str, var: str = "x") -> sp.Expr:
     """Студенческий ввод → sympy.Expr. Разрешены только переменная var,
     функции и константы из белого списка. Иначе ParseError."""
@@ -182,7 +238,11 @@ def parse_answer(raw: str, var: str = "x") -> sp.Expr:
 
     local = {**FUNCS, **CONSTS, var: sp.Symbol(var)}
     try:
-        expr = parse_expr(s, local_dict=local, global_dict=dict(_GLOBALS), transformations=_TRANSFORMS)
+        code = stringify_expr(s, local, dict(_GLOBALS), _TRANSFORMS)
+        _magnitude(ast.parse(code.strip(), mode="eval"))      # до вычисления: 9^9^9 повесил бы процесс
+        expr = eval_expr(code, local, dict(_GLOBALS))
+    except _TooBig:
+        raise ParseError("Слишком большая степень") from None
     except ParseError:
         raise
     except Exception:
@@ -195,6 +255,14 @@ def parse_answer(raw: str, var: str = "x") -> sp.Expr:
     if any(sym.name != var for sym in expr.free_symbols):
         raise ParseError(f"Переменная здесь — {var}")
     return expr
+
+
+def parse_value(raw: str, var: str = "x") -> sp.Expr:
+    """Значение предела: число, oo, ∞, −∞. Переменная или комплексное число → ParseError."""
+    v = parse_answer(raw.replace("∞", "oo").replace("−", "-"), var)
+    if v.free_symbols or (not v.is_infinite and v.is_extended_real is False):
+        raise ParseError("Ответ — число, ∞ или −∞")
+    return v
 
 
 def parse_trusted(src: str, var: str = "x") -> sp.Expr:

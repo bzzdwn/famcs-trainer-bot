@@ -6,14 +6,18 @@ import random
 from dataclasses import dataclass, field
 from typing import Callable
 
+import sympy as sp
+
 from core.checker import OK, WRONG, Verdict
 from core.generator import Instance
 from core.hints import Hint, answer_hints
 from core.latex import ru_latex
-from core.parser import ParseError, parse_answer, split_constant
+from core.parser import ParseError, parse_answer, parse_value, split_constant
 
 MAX_ATTEMPTS = 3
-NOT_SPENT = {"parse_error", "timeout"}   # опечатка в записи / не смогли проверить — попытка не тратится
+DIRECT_VALUE_ATTEMPTS = 2          # «Сразу ответ» в пределах: 0, 1, ∞, ½ легко угадать
+FINAL = ("antiderivative", "value")      # типы последней точки
+NOT_SPENT = {"parse_error", "timeout", "approx"}   # опечатка в записи / не смогли проверить — попытка не тратится
 REVEALED = "revealed"
 
 # check(kind, user, expected, var, domain) -> Verdict; в боте — check_with_timeout, в тестах — прямой вызов
@@ -21,8 +25,15 @@ CheckFn = Callable[[str, str, str, str, tuple[float, float]], Verdict]
 
 
 HIDE_TEXT = "Убрал часть неверных вариантов."
+NOTE_DEAD = "Верно, но после правила Лопиталя станет сложнее: неопределённость не исчезнет."
 NOTE_METHOD_ALT = "Сработает, но можно короче"
 METHOD_IDX = -1                    # номер шага «метод» в логе: номера шагов шаблона не сдвигаются
+
+
+def _value_latex(v) -> str:
+    """Значение предела: число, +∞ или −∞."""
+    e = sp.sympify(v)
+    return {sp.oo: r"+\infty", -sp.oo: r"-\infty"}.get(e) or ru_latex(e)
 
 
 @dataclass(frozen=True)
@@ -43,6 +54,7 @@ class Prompt:
     text: str                      # вопрос точки
     options: tuple[str, ...] = ()  # buttons: подписи (choice) или LaTeX формул (expr / transformed_integrand)
     formulas: bool = False         # True → options — формулы, рисуем карточкой
+    context: str | None = None     # предел: LaTeX текущей дроби, о которой вопрос
     hidden: tuple[int, ...] = ()   # варианты, убранные подсказкой (номера остальных не меняются)
 
 
@@ -93,10 +105,10 @@ class TrainSession:
         self._results: list[str] = []          # first_try | later | revealed | skipped
         self._dropped = False
         self._start_direct = self._direct = direct
-        finals = [i for i, cp in enumerate(instance.checkpoints) if cp.type == "antiderivative"]
+        finals = [i for i, cp in enumerate(instance.checkpoints) if cp.type in FINAL]
         self._final = finals[-1] if finals else None
         if direct and self._final is None:
-            raise ValueError("«Сразу ответ» возможен только в задаче с первообразной")
+            raise ValueError("«Сразу ответ» возможен только в задаче с итоговым ответом")
         self._final_attempts = 0               # попытки на финальной точке, потраченные в «Сразу ответ»
         if direct:
             self._idx = self._final
@@ -108,13 +120,15 @@ class TrainSession:
             rng = random.Random(f"{seed}:{i}")
             if cp.type == "choice":
                 opts = list(cp.options)
-                rng.shuffle(opts)
+                if cp.role != "type":          # типы неопределённости — всегда в одном порядке
+                    rng.shuffle(opts)
                 self._buttons[i] = (tuple(opts), tuple(opts), {k for k, o in enumerate(opts) if o in cp.correct})
-            elif cp.type in ("expr", "transformed_integrand") and not free_input:
+            elif cp.type in ("expr", "transformed_integrand") and (not free_input or cp.role == "reduce"):
+                # приведение вводом не спрашиваем: исходное выражение равно своей дроби
                 srcs = [cp.expected, *cp.distractors]
                 rng.shuffle(srcs)
-                self._buttons[i] = (tuple(ru_latex(s, cp.var) for s in srcs), tuple(srcs),
-                                    {srcs.index(cp.expected)})
+                self._buttons[i] = (tuple((cp.labels or {}).get(s) or ru_latex(s, cp.var) for s in srcs), tuple(srcs),
+                                    {k for k, s in enumerate(srcs) if s == cp.expected or s in cp.alternatives})
 
     # --- состояние --------------------------------------------------------
 
@@ -136,8 +150,22 @@ class TrainSession:
         if self._idx in self._buttons:
             labels = self._buttons[self._idx][0]
             return Prompt("buttons", self._idx, cp.type, cp.prompt, labels, formulas=cp.type != "choice",
-                          hidden=self._hidden)
-        return Prompt("input", self._idx, cp.type, cp.prompt)
+                          context=self._context(), hidden=self._hidden)
+        return Prompt("input", self._idx, cp.type, cp.prompt, context=self._context())
+
+    def _context(self) -> str | None:
+        """Дробь, к которой студент пришёл: «какой тип теперь?» — у неё. В «Сразу ответ» её нет."""
+        if self._direct or not self._cp.role:
+            return None
+        for c in reversed(self.inst.checkpoints[:self._idx]):
+            if c.labels:
+                return c.labels[c.expected]
+        return None
+
+    @property
+    def _max_attempts(self) -> int:
+        return DIRECT_VALUE_ATTEMPTS if self._cp.type == "value" and (
+            self._direct or not self.inst.steps) else MAX_ATTEMPTS
 
     def _ensure(self, kind: str) -> None:
         if self.finished:
@@ -153,7 +181,9 @@ class TrainSession:
             return cp.correct[0]
         if cp.type == "antiderivative":
             return ru_latex(cp.reference, cp.var) + " + C"
-        return ru_latex(cp.expected, cp.var)
+        if cp.type == "value":
+            return _value_latex(cp.expected)
+        return (cp.labels or {}).get(cp.expected) or ru_latex(cp.expected, cp.var)
 
     def _advance(self, result: str) -> None:
         if self._in_method:                    # после метода — первая точка шаблона (idx уже 0)
@@ -187,11 +217,11 @@ class TrainSession:
             return Outcome(verdict, True, attempt_no, True, log=log)
         if not spent:
             return Outcome(verdict, False, attempt_no, False, log=log)
-        if not self._in_method and self._free and self._cp.skippable and ctype != "antiderivative":
+        if not self._in_method and self._free and self._cp.skippable and ctype not in FINAL:
             self._advance("skipped")                       # «свой путь» — дальше без штрафа
             return Outcome(verdict, False, attempt_no, True, log=log)
         self._attempts += 1
-        if self._attempts >= MAX_ATTEMPTS:
+        if self._attempts >= (MAX_ATTEMPTS if self._in_method else self._max_attempts):
             answer = self._answer()
             self._advance(REVEALED)
             return Outcome(verdict, True, attempt_no, True, forced_reveal=True, answer=answer, log=log)
@@ -219,11 +249,18 @@ class TrainSession:
         labels, srcs, correct = self._buttons[self._idx]
         if not 0 <= i < len(labels):
             raise ValueError(f"нет кнопки {i}")
-        return self._register(Verdict(OK if i in correct else WRONG), srcs[i], "button")
+        cp = self._cp
+        note = NOTE_METHOD_ALT if srcs[i] in cp.alternatives else NOTE_DEAD if srcs[i] in cp.dead else None
+        return self._register(Verdict(OK if i in correct else WRONG, note), srcs[i], "button")
 
     def preview(self, raw: str) -> Preview:
         """Разбор ввода для «Ты имел в виду это?» — до проверки."""
         cp = self._cp
+        if cp.type == "value":
+            try:
+                return Preview(True, latex=_value_latex(parse_value(raw, cp.var)))
+            except ParseError as exc:
+                return Preview(False, error=str(exc))
         body, has_c = split_constant(raw) if cp.type == "antiderivative" else (raw, False)
         try:
             e = parse_answer(body, cp.var)
@@ -236,7 +273,8 @@ class TrainSession:
         self._ensure("input")
         cp = self._cp
         expected = self.inst.integrand if cp.type == "antiderivative" else cp.expected
-        verdict = self._check(cp.type, raw, expected, cp.var, cp.domain)
+        extra = {"traps": cp.traps} if cp.type == "value" else {}
+        verdict = self._check(cp.type, raw, expected, cp.var, cp.domain, **extra)
         return self._register(verdict, raw, input_method)
 
     def take_hint(self) -> Hint | None:
@@ -268,7 +306,7 @@ class TrainSession:
         self._answer_hints = (direct, hints)
 
     def _on_final(self) -> bool:
-        return not self._in_method and (self._direct or self._cp.type == "antiderivative")
+        return not self._in_method and (self._direct or self._cp.type in FINAL)
 
     def _ladder(self) -> tuple[Hint, ...]:
         if self._on_final():
@@ -327,6 +365,8 @@ class TrainSession:
             raise RuntimeError("задача уже закрыта")
         if not self._direct:
             raise ValueError("уже идём по шагам")
+        if not self.inst.steps:
+            raise ValueError("у задачи нет шагов")
         self._final_attempts = self._attempts
         self._direct = False
         self._idx = 0

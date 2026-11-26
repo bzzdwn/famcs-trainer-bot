@@ -44,6 +44,14 @@ def ru_latex(expr: sp.Expr | str, var: str = "x") -> str:
     return _ru(sp.latex(_to_expr(expr, var), ln_notation=True, inv_trig_style="full"))
 
 
+def limit_latex(expr: sp.Expr, var: str, to: sp.Expr, side: str, body: str | None = None) -> str:
+    """lim f(x) в русской нотации: x → 0⁺, x → +∞. body — готовый LaTeX функции вместо ru_latex(expr)."""
+    point = {sp.oo: r"+\infty", -sp.oo: r"-\infty"}.get(to) or sp.latex(to)
+    if side != "both" and to not in (sp.oo, -sp.oo):
+        point += f"^{{{side}}}" if to.is_Atom else rf" \; {side} \; 0"
+    return rf"\lim_{{{var} \to {point}}}\;\; {body or ru_latex(expr, var)}"
+
+
 def integral_latex(integrand: sp.Expr | str, var: str = "x") -> str:
     """∫ f(x) dx в русской нотации."""
     e = sp.Integral(_to_expr(integrand, var), sp.Symbol(var))

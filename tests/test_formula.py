@@ -15,7 +15,7 @@ from core.parser import MAX_LEN, parse_answer, split_constant
 from core.templates import load_templates
 
 ROOT = Path(__file__).resolve().parent.parent
-BANK = load_templates(ROOT / "data" / "templates")
+BANK = {k: t for k, t in load_templates(ROOT / "data" / "templates").items() if not t.limit}  # интегралы; пределы — tests/test_limit_*.py
 PAGE = ROOT / "docs" / "formula"
 x = sp.Symbol("x")
 

@@ -126,8 +126,9 @@ def test_mixed_topic_title():
 
 
 def test_mixed_topic_last_in_menu():
-    assert list(TOPIC_NAMES)[-1] == MIXED
-    assert list(available(BANK))[-1] == MIXED
+    """«Разные» — последняя тема интегралов (за ними идёт раздел пределов)."""
+    assert [t for t in TOPIC_NAMES if t.startswith("indef_integral.")][-1] == MIXED
+    assert list(available(BANK, "indef_integral"))[-1] == MIXED
 
 
 def test_mixed_topic_only_level_c():
@@ -156,6 +157,6 @@ def test_method_options():
 def test_build_method_step():
     tpl = BANK["int_trig_tan_01"]
     step = build_method_step(BANK, tpl)
-    assert step.options == method_options(BANK)
+    assert step.options == method_options(BANK, "indef_integral")   # методы своего раздела
     assert step.correct == tpl.blitz_method and step.alternatives == ("универсальная замена",)
     assert step.hint == tpl.checkpoints[0].hint

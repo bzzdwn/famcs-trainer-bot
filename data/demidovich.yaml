@@ -94,3 +94,10 @@
 2169: {status: covered, template: mix_abs_diff_01}
 2170: {status: skip, reason: "ответ кусочный; sgn и условий нет в синтаксисе ввода"}
 2171: {status: skip, reason: "max в условии, ответ кусочный; нет в синтаксисе ввода"}
+# отдел II: правило Лопиталя, № 1318–1375
+1318: {status: covered, template: lim_ratio_sin_01}
+1319: {status: covered, template: lim_ratio_ch_01}
+1341: {status: covered, template: lim_prod_ln_01}
+1342: {status: covered, template: lim_pow_xx_01}
+1346: {status: covered, template: lim_pow_1inf_01}
+1354: {status: covered, template: lim_diff_exp_01}

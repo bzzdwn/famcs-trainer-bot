@@ -6,7 +6,7 @@ from bot.db import DB, TZ
 
 TRAIN_MODES = ("train", "train_direct")
 COUNTED_STATUSES = ("solved", "revealed")      # dropped / abandoned не портят статистику
-NOT_SPENT = ("parse_error", "timeout")
+NOT_SPENT = ("parse_error", "timeout", "approx")
 
 
 @dataclass(frozen=True)

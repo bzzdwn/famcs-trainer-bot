@@ -175,7 +175,7 @@ def test_symbolic_timeout_falls_back_to_numeric():
 def test_total_timeout_and_recovery():
     # обе ветки медленные (~4.5 с и ~1 с), таймауты урезаны до 0.3 с
     t0 = time.monotonic()
-    v = check_with_timeout("expr", "(x+1)^1500", "expand((x+1)**1500)",
+    v = check_with_timeout("expr", "(x+1)^1000", "expand((x+1)**1500)",
                            symbolic_timeout=0.3, numeric_timeout=0.3)
     assert v.status == TIMEOUT
     assert time.monotonic() - t0 < 3.5

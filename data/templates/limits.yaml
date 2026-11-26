@@ -1,0 +1,88 @@
+# Пределы: правило Лопиталя (Демидович, отдел II, № 1318–1370).
+# Точки задачи (тип → приведение → f′/g′ → … → значение) строит генератор: core/limit_build.py.
+
+- id: lim_ratio_sin_01
+  topic: limits.lhopital
+  source: "Демидович, № 1318"
+  difficulty: A
+  var: x
+  params:
+    a: {int: [1, 7]}
+    b: {int: [1, 7]}
+  constraints: ["a != b"]
+  limit: {to: "0", side: both}
+  ratio: ["sin(a*x)", "sin(b*x)"]
+  blitz_method: "0/0"
+  examples:
+    - {number: 1318, params: {a: 3, b: 2}, answer: "3/2"}      # в книге a/b
+
+- id: lim_ratio_ch_01
+  topic: limits.lhopital
+  source: "Демидович, № 1319"
+  difficulty: A
+  var: x
+  params:
+    a: {int: [1, 5]}
+  limit: {to: "0", side: both}
+  ratio: ["cosh(a*x) - cos(a*x)", "x**2"]
+  blitz_method: "0/0"
+  examples:
+    - {number: 1319, params: {a: 1}, answer: "1"}
+
+- id: lim_prod_ln_01
+  topic: limits.lhopital
+  source: "Демидович, № 1341"
+  difficulty: A
+  var: x
+  params:
+    p: {int: [1, 5]}
+  limit: {to: "0", side: "+"}
+  product: ["x**p", "log(x)"]
+  reduce: ["log(x)", "x**(-p)"]
+  reduce_other:
+    - ["x**p", "1/log(x)"]         # верно, но после f′/g′ только сложнее
+  blitz_method: "0·∞"
+  examples:
+    - {number: 1341, params: {p: 1}, answer: "0"}              # в книге ε > 0; здесь ε = p
+
+- id: lim_pow_xx_01
+  topic: limits.lhopital
+  source: "Демидович, № 1342"
+  difficulty: A
+  var: x
+  params:
+    a: {int: [1, 5]}
+  limit: {to: "0", side: "+"}
+  power: ["x", "a*x"]
+  reduce: ["log(x)", "1/(a*x)"]
+  blitz_method: "0⁰"
+  examples:
+    - {number: 1342, params: {a: 1}, answer: "1"}
+
+- id: lim_pow_1inf_01
+  topic: limits.lhopital
+  source: "Демидович, № 1346"
+  difficulty: A
+  var: x
+  params:
+    a: {int: [1, 5]}
+  limit: {to: "1", side: both}
+  power: ["x", "a/(1 - x)"]
+  reduce: ["a*log(x)", "1 - x"]
+  blitz_method: "1^∞"
+  examples:
+    - {number: 1346, params: {a: 1}, answer: "exp(-1)"}
+
+- id: lim_diff_exp_01
+  topic: limits.lhopital
+  source: "Демидович, № 1354"
+  difficulty: B
+  var: x
+  params:
+    a: {int: [1, 5]}
+  limit: {to: "0", side: both}
+  diff: ["1/x", "a/(exp(a*x) - 1)"]
+  reduce: ["exp(a*x) - 1 - a*x", "x*(exp(a*x) - 1)"]
+  blitz_method: "∞−∞"
+  examples:
+    - {number: 1354, params: {a: 1}, answer: "1/2"}

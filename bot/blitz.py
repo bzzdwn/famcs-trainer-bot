@@ -4,6 +4,7 @@ import re
 from dataclasses import dataclass
 
 from core.generator import Instance, generate
+from bot.topics import INTEGRALS, section_of
 from core.templates import Template
 
 BLITZ_SIZE = 10
@@ -68,10 +69,12 @@ class BlitzSummary:
 
 class BlitzRun:
     def __init__(self, bank: dict[str, Template], seed: int, size: int = BLITZ_SIZE,
-                 time_limit: float = TIME_LIMIT):
-        """Серия из size задач по шаблонам с blitz_method; без повторов, пока шаблонов хватает.
+                 time_limit: float = TIME_LIMIT, section: str = INTEGRALS):
+        """section — раздел серии и всех кнопок: методы разных разделов не смешиваются.
+        Серия из size задач по шаблонам с blitz_method; без повторов, пока шаблонов хватает.
         Различных методов < N_OPTIONS → ValueError."""
-        eligible = sorted((t for t in bank.values() if t.blitz_method), key=lambda t: t.id)
+        eligible = sorted((t for t in bank.values() if t.blitz_method and section_of(t.topic) == section),
+                          key=lambda t: t.id)
         methods = sorted({t.blitz_method for t in eligible})
         if len(methods) < N_OPTIONS:
             raise ValueError(f"для блица нужно ≥ {N_OPTIONS} различных методов, есть {len(methods)}")

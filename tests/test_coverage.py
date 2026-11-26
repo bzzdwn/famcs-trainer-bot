@@ -12,7 +12,7 @@ COV = yaml.safe_load((ROOT / "data" / "demidovich.yaml").read_text(encoding="utf
 
 def test_format():
     for num, e in COV.items():
-        assert isinstance(num, (int, float)) and 1628 <= num <= 2180, num            # отдел III
+        assert isinstance(num, (int, float)) and 1318 <= num <= 2180, num            # отдел II (пределы) и III
         assert e["status"] in ("covered", "skip"), num
         if e["status"] == "covered":
             assert e.get("template") in BANK, f"{num}: нет шаблона {e.get('template')}"

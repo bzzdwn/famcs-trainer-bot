@@ -62,9 +62,10 @@ def _stack(imgs: list) -> bytes:
     return buf.getvalue()
 
 
-def render_options(latexes: list[str]) -> bytes:
-    """Карточка вариантов: «1) … 2) … 3) … 4) …» одной картинкой."""
-    imgs = [Image.open(BytesIO(render_latex(rf"{i})\quad {l}"))).convert("RGB")
+def render_options(latexes: list[str], head: str | None = None) -> bytes:
+    """Карточка вариантов: «1) … 2) … 3) … 4) …» одной картинкой; head — формула, о которой вопрос, сверху."""
+    imgs = [Image.open(BytesIO(render_latex(head))).convert("RGB")] if head else []
+    imgs += [Image.open(BytesIO(render_latex(rf"{i})\quad {l}"))).convert("RGB")
             for i, l in enumerate(latexes, 1)]
     w = max(im.width for im in imgs) + 2 * PAD
     h = sum(im.height for im in imgs) + GAP * (len(imgs) - 1) + 2 * PAD

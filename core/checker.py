@@ -1,6 +1,7 @@
 """Проверка ответов: символьно, при неудаче — численно. Без LLM."""
 import multiprocessing
 import random
+import re
 from concurrent.futures import TimeoutError as FutureTimeout
 from dataclasses import dataclass
 from enum import Enum
@@ -8,7 +9,7 @@ from enum import Enum
 import sympy as sp
 from pebble import ProcessPool
 
-from core.parser import ParseError, parse_answer, parse_trusted, split_constant
+from core.parser import ParseError, parse_answer, parse_trusted, parse_value, split_constant
 
 OK, WRONG, SIGN, FACTOR, NO_CONST, PARSE_ERROR, TIMEOUT = (
     "ok", "wrong", "sign", "factor", "no_const", "parse_error", "timeout")
@@ -24,6 +25,8 @@ NOTE_FACTOR = "Потерян множитель"
 NOTE_NO_CONST = "Забыл +C"
 NOTE_ADD_CONST = "И не забудь +C"
 NOTE_MODULUS = "Не забудь модуль под логарифмом: ln|u|"
+NOTE_EXACT = "Нужно точное значение: дробь, корень, e^… — а не приближение"
+APPROX = "approx"           # приближение вместо точного значения: попытка не тратится
 NOTE_TIMEOUT = "Не смог проверить, упрости запись"
 
 
@@ -180,10 +183,43 @@ def check_antiderivative(user: str, integrand: str, var: str = "x",
     return Verdict(status, note)
 
 
+def _exact(e: sp.Expr) -> sp.Expr:
+    """Десятичные дроби → обыкновенные."""
+    return e.replace(lambda z: isinstance(z, sp.Float), lambda z: sp.Rational(str(z)))
+
+
+def _same_number(a: sp.Expr, b: sp.Expr) -> bool:
+    if a.is_infinite or b.is_infinite:
+        return a == b
+    return abs(sp.N(a - b, 40)) < sp.Float("1e-25") * max(1, abs(sp.N(b, 20)))
+
+
+def check_value(user: str, expected: str, var: str = "x", domain=None, *, symbolic: bool = True,
+                traps: dict[str, str] | None = None) -> Verdict:
+    """Значение предела: точное равенство; ∞ вводится как oo или ∞. traps: типичное неверное значение → диагноз."""
+    try:
+        u = parse_value(user, var)
+    except ParseError as e:
+        return Verdict(PARSE_ERROR, str(e))
+    u, e = _exact(u), sp.sympify(expected)
+    if _same_number(u, e):
+        return Verdict(OK)
+    finite = not (u.is_infinite or e.is_infinite)
+    if finite and re.search(r"\d[.,]\d", user) and abs(sp.N(u - e, 20)) <= sp.Float("0.02") * abs(sp.N(e, 20)):
+        return Verdict(APPROX, NOTE_EXACT)
+    for wrong, note in (traps or {}).items():
+        if _same_number(u, sp.sympify(wrong)):
+            return Verdict(WRONG, note)
+    if e != 0 and _same_number(u, -e):
+        return Verdict(SIGN, NOTE_SIGN)
+    return Verdict(WRONG)
+
+
 _CHECKS = {
     "expr": check_expr,
     "transformed_integrand": check_expr,
     "antiderivative": check_antiderivative,
+    "value": check_value,
 }
 
 
@@ -205,26 +241,26 @@ def _get_pool() -> ProcessPool:
     return _pool
 
 
-def _run(fn, args, symbolic: bool, timeout: float) -> Verdict:
-    fut = _get_pool().schedule(fn, args=args, kwargs={"symbolic": symbolic}, timeout=timeout)
+def _run(fn, args, symbolic: bool, timeout: float, extra: dict) -> Verdict:
+    fut = _get_pool().schedule(fn, args=args, kwargs={"symbolic": symbolic, **extra}, timeout=timeout)
     return fut.result()
 
 
 def check_with_timeout(kind: str, user: str, expected: str, var: str = "x",
                        domain: tuple[float, float] = (-3.0, 3.0), *,
-                       symbolic_timeout: float = 1.5, numeric_timeout: float = 1.5) -> Verdict:
-    """kind: expr | transformed_integrand | antiderivative.
+                       symbolic_timeout: float = 1.5, numeric_timeout: float = 1.5, **extra) -> Verdict:
+    """kind: expr | transformed_integrand | antiderivative | value (extra: traps).
     Символьная ветка в процессе pebble; таймаут → численная ветка; её таймаут → TIMEOUT."""
     fn = _CHECKS[kind]
     args = (user, expected, var, tuple(domain))
     try:
-        return _run(fn, args, True, symbolic_timeout)
+        return _run(fn, args, True, symbolic_timeout, extra)
     except FutureTimeout:
         pass
     except Exception:
         return Verdict(TIMEOUT, NOTE_TIMEOUT)
     try:
-        return _run(fn, args, False, numeric_timeout)
+        return _run(fn, args, False, numeric_timeout, extra)
     except Exception:
         return Verdict(TIMEOUT, NOTE_TIMEOUT)
 

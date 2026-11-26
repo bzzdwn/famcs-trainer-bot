@@ -18,7 +18,8 @@ from core.templates import load_templates
 
 N_INSTANCES = 50
 N_TIMED = 5
-BANK = load_templates(Path(__file__).resolve().parent.parent / "data" / "templates")
+BANK = {k: t for k, t in load_templates(Path(__file__).resolve().parent.parent / "data" / "templates").items()
+        if not t.limit}  # интегралы; пределы — tests/test_limit_*.py
 IDS = sorted(BANK)
 
 
