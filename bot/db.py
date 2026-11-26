@@ -139,6 +139,14 @@ class DB:
                                student_id, instance_id, mode, _now())
         return cur.lastrowid
 
+    async def solved_templates(self, student_id: int) -> dict[str, str]:
+        """{шаблон: когда последний раз решён сам} — только тренировки: показанный ответ и блиц не в счёт."""
+        async with self.conn.execute(
+                "SELECT i.template_id, MAX(s.finished_at) FROM sessions s JOIN instances i ON i.id = s.instance_id "
+                "WHERE s.student_id = ? AND s.status = 'solved' AND s.mode IN ('train', 'train_direct') "
+                "GROUP BY i.template_id", (student_id,)) as cur:
+            return {tid: at for tid, at in await cur.fetchall()}
+
     async def finish_session(self, session_id: int, status: str) -> None:
         await self._exec("UPDATE sessions SET status=?, finished_at=? WHERE id=?", status, _now(), session_id)
 

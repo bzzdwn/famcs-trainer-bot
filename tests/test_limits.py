@@ -403,3 +403,15 @@ def test_heavy_template_is_fast():
     t0 = time.monotonic()
     generate(parse_template(r), 1)                                # самопроверка и сборка: цепочка считается один раз
     assert time.monotonic() - t0 < 4                              # сервер медленнее в 3–4 раза, таймаут генератора 20 с
+
+
+@pytest.mark.parametrize("to, side, want", [
+    ("0", "+", r"x\to+0"), ("0", "-", r"x\to-0"), ("1", "-", r"x\to1-0"), ("pi/2", "-", r"x\to\frac{\pi}{2}-0"),
+    ("3", "+", r"x\to3+0"), ("0", "both", r"x\to0}"), ("oo", "-", r"x\to+\infty"),
+])
+def test_one_sided_point_is_written_like_demidovich(to, side, want):
+    """Односторонний предел: x → +0, x → 1 − 0 (а не 0⁺)."""
+    from core.latex import limit_latex
+    s = limit_latex(S("sin(x)"), "x", S(to), side).replace(" ", "").replace(r"\;", "")
+    assert want in s and "^{+}" not in s and "^{-}" not in s
+    assert render_latex(limit_latex(S("sin(x)"), "x", S(to), side)).startswith(PNG_MAGIC)

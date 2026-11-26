@@ -45,10 +45,10 @@ def ru_latex(expr: sp.Expr | str, var: str = "x") -> str:
 
 
 def limit_latex(expr: sp.Expr, var: str, to: sp.Expr, side: str, body: str | None = None) -> str:
-    """lim f(x) в русской нотации: x → 0⁺, x → +∞. body — готовый LaTeX функции вместо ru_latex(expr)."""
+    """lim f(x) в нотации Демидовича: x → +0, x → 1 − 0, x → +∞. body — готовый LaTeX функции вместо ru_latex(expr)."""
     point = {sp.oo: r"+\infty", -sp.oo: r"-\infty"}.get(to) or sp.latex(to)
     if side != "both" and to not in (sp.oo, -sp.oo):
-        point += f"^{{{side}}}" if to.is_Atom else rf" \; {side} \; 0"
+        point = f"{side}0" if to == 0 else rf"{point} {side} 0"
     return rf"\lim_{{{var} \to {point}}}\;\; {body or ru_latex(expr, var)}"
 
 

@@ -88,17 +88,25 @@ def available(bank: dict[str, Template], section: str | None = None) -> dict[str
 
 
 def pick_template(bank: dict[str, Template], topic: str, level: str, rng: random.Random,
-                  exclude: str | None = None) -> Template | None:
+                  exclude: str | None = None, solved: dict[str, str] | None = None) -> Template | None:
     """Случайный шаблон темы и уровня; None, если таких нет.
     «Вразнобой» — любая тема своего раздела, level = ANY_LEVEL — любой уровень.
-    exclude — id прошлого шаблона: не повторяем подряд, если есть из чего выбрать."""
+    exclude — id прошлого шаблона: не повторяем подряд, если есть из чего выбрать.
+    solved — {id: когда решён сам (ISO)}: сначала нерешённые; решено всё — самый давний (темы идут по кругу)."""
     def fits(t: Template) -> bool:
         return section_of(t.topic) == section_of(topic) if is_mix(topic) else t.topic == topic
 
     cands = sorted((t for t in bank.values() if fits(t) and level in (ANY_LEVEL, t.difficulty)), key=lambda t: t.id)
     fresh = [t for t in cands if t.id != exclude]
     pool = fresh or cands                      # единственный шаблон — повтор лучше, чем «задач нет»
-    return rng.choice(pool) if pool else None
+    if not pool:
+        return None
+    solved = solved or {}
+    unsolved = [t for t in pool if t.id not in solved]
+    if unsolved:
+        return rng.choice(unsolved)
+    oldest = min(solved[t.id] for t in pool)
+    return rng.choice([t for t in pool if solved[t.id] == oldest])
 
 
 def topic_title(topic: str) -> str:

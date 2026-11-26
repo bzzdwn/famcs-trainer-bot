@@ -271,10 +271,12 @@ async def close_current(chat_id: int, db: DB) -> bool:
 async def cb_level(cb: CallbackQuery, db: DB, bank: dict[str, Template], gen: GenPool):
     _, topic, level = cb.data.split(":")
     await cb.answer()
-    if not await require_student(cb.message, db, cb.from_user.id):
+    st = await require_student(cb.message, db, cb.from_user.id)
+    if not st:
         return
     chat = cb.message.chat.id
-    tpl = pick_template(bank, topic, level, random.Random(secrets.randbits(64)), exclude=LAST_TPL.get(chat))
+    tpl = pick_template(bank, topic, level, random.Random(secrets.randbits(64)), exclude=LAST_TPL.get(chat),
+                        solved=await db.solved_templates(st.id))
     if tpl is None:
         await cb.message.answer("По этой теме и уровню пока нет задач.")
         return
