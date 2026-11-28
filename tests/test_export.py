@@ -113,7 +113,7 @@ async def test_checkpoints(data):
 
 async def test_blitz_matrix(data):
     m = data.blitz
-    assert m.methods == list(method_options(BANK))
+    assert m.methods == list(method_options(BANK, "indef_integral"))   # блиц интегралов — методы своего раздела
     assert m.counts == {("универсальная замена", "универсальная замена"): 1,
                         ("универсальная замена", None): 1,
                         ("по частям", "универсальная замена"): 1}
@@ -152,7 +152,7 @@ async def test_build_xlsx(data):
     assert tp.max_row == 1 + len(data.checkpoints)
     assert tp.cell(2, 2).value == "По частям"                         # тема — по-русски
 
-    bl = wb["Блиц"]
+    bl = wb["Блиц — интегралы"]                                      # лист блица теперь по разделам
     h = header(bl)
     assert "не успел" in h and h[-1] == "% верных"
     rows = {bl.cell(r, 1).value: r for r in range(2, bl.max_row + 1)}

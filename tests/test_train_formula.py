@@ -17,7 +17,7 @@ from bot.commands import commands_for
 from bot.config import Settings
 from bot.db import DB
 from bot.flow import TrainSession
-from bot.handlers import admin, start, train
+from bot.handlers import admin, blitz, me, start, train
 from core.checker import check_antiderivative, check_expr
 from core.generator import build, generate
 from core.hints import answer_hints
@@ -30,7 +30,7 @@ GOOD = r"e^{x}\operatorname{\mathrm{tg}}\left(\frac{x}{2}\right)+C"        # mix
 _ids = itertools.count(1)
 
 DP = Dispatcher()                                        # router модуля можно включить только один раз
-DP.include_routers(admin.make_router(ADMIN), train.router)
+DP.include_routers(admin.make_router(ADMIN), blitz.router, me.router, train.router)   # порядок как в bot.__main__
 
 
 class FakeBot(Bot):

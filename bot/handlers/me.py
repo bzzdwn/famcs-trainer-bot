@@ -7,7 +7,7 @@ from aiogram.types import Message
 
 from bot.db import DB
 from bot.stats import student_stats
-from bot.topics import TOPIC_NAMES, topic_title
+from bot.topics import INTEGRALS, SECTION_NAMES, TOPIC_NAMES, topic_title
 
 router = Router()
 
@@ -28,8 +28,11 @@ async def cmd_me(message: Message, db: DB):
         return
     st = await student_stats(db, student.id)
     pct = f"{st.first_try_pct:.0f}% ({st.first_try} из {st.points} шагов)" if st.points else "—"
-    blitz = (f"{st.best_blitz[0]}/{st.best_blitz[1]} · {st.best_blitz[2]} с на карточку" if st.best_blitz
-             else "ещё не было — /blitz")
+    fmt = lambda b: f"{b[0]}/{b[1]} · {b[2]} с на карточку"
+    blitz = fmt(st.best_blitz) if st.best_blitz else "ещё не было — /blitz"
+    if len(st.best_blitz_by_section) > 1 or set(st.best_blitz_by_section) - {INTEGRALS}:
+        best = st.best_blitz_by_section
+        blitz = "; ".join(f"{SECTION_NAMES[s]} {fmt(best[s])}" for s in SECTION_NAMES if s in best)
     lines = [
         f"<b>{escape(student.full_name)}</b>",
         f"🔥 Серия: {st.streak} {days_word(st.streak)} подряд",

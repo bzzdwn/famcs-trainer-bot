@@ -108,5 +108,5 @@ async def test_blitz_uses_ready_series(w, monkeypatch):                 # noqa: 
 async def test_blitz_failure_keeps_current_task(w, monkeypatch):        # noqa: F811
     a = await w.task()
     assert await start(w, OneSeries(None), monkeypatch) is None
-    assert "Не получилось" in w.bot.texts() and "blitz" in w.bot.buttons()
+    assert "Не получилось" in w.bot.texts() and "bt:25:indef_integral" in w.bot.buttons()   # «ещё раз» — тот же блиц
     assert train.ACTIVE.get(STUDENT) is a

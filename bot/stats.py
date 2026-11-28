@@ -1,5 +1,5 @@
 """Личная статистика (/me)."""
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
 
 from bot.db import DB, TZ
@@ -16,6 +16,7 @@ class Stats:
     first_try: int                       # из них с первой попытки
     best_blitz: tuple[int, int, int] | None   # (счёт, из скольких, секунд на карточку)
     streak: int                          # дней подряд с активностью
+    best_blitz_by_section: dict[str, tuple[int, int, int]] = field(default_factory=dict)
 
     @property
     def first_try_pct(self) -> float | None:
@@ -71,9 +72,13 @@ async def student_stats(db: DB, student_id: int, today: date | None = None) -> S
             *counted[1], *NOT_SPENT):
         first.setdefault((sid, cp), verdict)
 
-    best = await _fetch(db, "SELECT score, total, COALESCE(time_limit, 10) AS t FROM blitz_runs "
-                            "WHERE student_id = ? AND finished_at IS NOT NULL "
-                            "ORDER BY score DESC, t ASC, total ASC LIMIT 1", student_id)
+    by_section: dict[str, tuple[int, int, int]] = {}
+    for sec, score, total, t in await _fetch(
+            db, "SELECT COALESCE(section, 'indef_integral'), score, total, COALESCE(time_limit, 10) AS t "
+                "FROM blitz_runs WHERE student_id = ? AND finished_at IS NOT NULL "
+                "ORDER BY score DESC, t ASC, total ASC", student_id):
+        by_section.setdefault(sec, (score, total, t))           # первая строка раздела — лучшая
+    best = [by_section["indef_integral"]] if "indef_integral" in by_section else []
 
     days = {local_date(ts) for (ts,) in await _fetch(
         db, "SELECT a.created_at FROM attempts a JOIN sessions s ON s.id = a.session_id WHERE s.student_id = ?",
@@ -85,4 +90,5 @@ async def student_stats(db: DB, student_id: int, today: date | None = None) -> S
         first_try=sum(v == "ok" for v in first.values()),
         best_blitz=tuple(best[0]) if best else None,
         streak=streak(days, today),
+        best_blitz_by_section=by_section,
     )

@@ -7,23 +7,17 @@ from core.generator import (
 )
 from core.latex import limit_latex, polish, ru_latex
 from core.limits import (
-    INF, MAX_CARD_PX, MAX_DIFFS, MAX_OPS, NO_TYPE, TYPES, LimitError, Link, _lim, card_px, lhopital_chain, plain_value,
+    INF, MAX_CARD_PX, MAX_DIFFS, MAX_OPS, TYPE_HINTS, _signed, NO_TYPE, TYPES, LimitError, Link, _lim, card_px, lhopital_chain, plain_value,
     verify_limit,
 )
 from core.parser import parse_trusted
 from core.templates import Example, Template
 
 DEFAULT_DOMAIN = (-3.0, 3.0)
-TYPE_HINTS = {
-    "0/0": "Числитель и знаменатель стремятся к нулю: можно применять правило Лопиталя.",
-    "∞/∞": "Числитель и знаменатель стремятся к бесконечности: можно применять правило Лопиталя.",
-    "0·∞": "Один множитель стремится к нулю, другой к бесконечности: приведи к дроби.",
-    "∞−∞": "Разность двух бесконечностей: приведи к одной дроби.",
-    "1^∞": "Основание стремится к 1, показатель к бесконечности: возьми ln y.",
-    "0⁰": "Основание и показатель стремятся к нулю: возьми ln y.",
-    "∞⁰": "Основание стремится к бесконечности, показатель к нулю: возьми ln y.",
-    NO_TYPE: "Подставь предельную точку в числитель и знаменатель по отдельности: значение уже видно.",
-}
+TYPE_LOOK = "Подставь предельную точку в каждую часть по отдельности и посмотри, к чему они стремятся."
+NOTE_DEAD = "Верно, но после правила Лопиталя станет сложнее: неопределённость не исчезнет."
+PART_NAMES = {"ratio": ("Числитель", "знаменатель"), "product": ("Первый множитель", "второй"),
+              "diff": ("Уменьшаемое", "вычитаемое"), "power": ("Основание", "показатель")}
 TRAP_LN = "Это предел ln y. Вернись к y: возьми e в этой степени."
 TRAP_OVER = "Неопределённости уже нет, а правило Лопиталя применено ещё раз."
 LH_HINT = "Производная числителя, делённая на производную знаменателя (а не производная дроби), затем сократи."
@@ -112,10 +106,46 @@ def _plain(e: sp.Expr, var: str) -> str:
     return str(e.xreplace({s: sp.Symbol(var) for s in e.free_symbols if s.name == var}))
 
 
-def _type_point(kind: str, first: bool, var: str, dom) -> CheckpointInstance:
+def _fmt(v: sp.Expr) -> str:
+    """Предел части словами: 0, 3/2, −∞, e^(−1)."""
+    if v in INF:
+        return "+∞" if v == sp.oo else "−∞"
+    text = sp.sstr(sp.nsimplify(v) if v.is_number else v)
+    for a, b in (("**", "^"), ("exp(", "e^("), ("log(", "ln("), ("sqrt(", "√("), ("-", "−"), ("*", "·")):
+        text = text.replace(a, b)
+    return text
+
+
+def _facts(t: _Task, a: sp.Expr, b: sp.Expr, kind: str) -> str:
+    """«Числитель → 0, знаменатель → +∞.» — куда стремятся части (двусторонняя ∞ разных знаков — просто ∞)."""
+    first, second = PART_NAMES[kind]
+    vals = []
+    for e in (a, b):
+        if t.side == "both" and t.to not in INF:
+            r, left = (plain_value(e, t.x, t.to, s) for s in ("+", "-"))
+            if r in INF and left in INF and r != left:
+                vals.append("∞")                       # справа и слева бесконечности разных знаков
+                continue
+        v = _signed(e, t.x, t.to, t.side)
+        vals.append(_fmt(v) if v is not None else "∞" if e.has(t.x) else _fmt(e))
+    return f"{first} → {vals[0]}, {second} → {vals[1]}."
+
+
+def _type_point(t: _Task, kind: str, first: bool, parts: tuple[sp.Expr, sp.Expr], how: str) -> CheckpointInstance:
     prompt = "Какой тип неопределённости?" if first else "Какой тип неопределённости теперь?"
-    return CheckpointInstance("choice", prompt, TYPE_HINTS[kind], var, dom, options=(*TYPES, NO_TYPE), correct=(kind,),
-                              role="type")
+    facts = _facts(t, *parts, how)
+    notes = {}
+    for other in (*TYPES, NO_TYPE):
+        if other == kind:
+            continue
+        if other == NO_TYPE:
+            notes[other] = f"Подставь отдельно в каждую часть: {facts[0].lower()}{facts[1:]} Это неопределённость."
+        elif kind == NO_TYPE:
+            notes[other] = f"Неопределённости нет: {facts[0].lower()}{facts[1:]}"
+        else:
+            notes[other] = f"Не тот тип: {facts[0].lower()}{facts[1:]}"
+    return CheckpointInstance("choice", prompt, TYPE_LOOK, t.tpl.var, t.domain, options=(*TYPES, NO_TYPE),
+                              correct=(kind,), role="type", notes=notes, extra_hints=((facts, None),))
 
 
 Pair = tuple[sp.Expr, sp.Expr]
@@ -145,14 +175,20 @@ def _neat(p: Pair) -> Pair:
         return p
 
 
+AUTO_NOTES = ("Проверь знак.", "Потерян множитель (например, от производной сложной функции).",
+              "Потерян множитель (например, от производной сложной функции).", "Дробь перевёрнута.")
+
+
 def _pair_point(t: _Task, prompt: str, hint: str, role: str, right: Pair, same: dict[str, list[Pair]],
-                wrong: list[Pair]) -> CheckpointInstance:
+                wrong: list[tuple[Pair, str]], extra_hints: tuple = ()) -> CheckpointInstance:
     """Выбор из четырёх дробей. same — равные верной (dead / alternatives): показываем, но они не «неверные по значению»."""
     var, (n, d) = t.tpl.var, right
     shown = [*same.get("dead", []), *same.get("alternatives", [])][:N_DISTRACTORS]
+    why = {p: NOTE_DEAD for p in same.get("dead", [])}
     value = n / d
     used = [value]
-    for p in [*wrong, (-n, d), (2 * n, d), (n, 2 * d), (d, n)]:
+    auto = list(zip([(-n, d), (2 * n, d), (n, 2 * d), (d, n)], AUTO_NOTES))
+    for p, note in [*wrong, *auto]:
         if len(shown) == N_DISTRACTORS:
             break
         if p[1] == 0 or any(e.has(sp.nan, sp.zoo, sp.oo) for e in p):
@@ -164,12 +200,14 @@ def _pair_point(t: _Task, prompt: str, hint: str, role: str, right: Pair, same: 
             continue
         used.append(q)
         shown.append(p)
+        why[p] = note
     if len(shown) < N_DISTRACTORS:
         t.fail(f"{role}: не набралось {N_DISTRACTORS} различимых вариантов")
     names = {k: tuple(_src(p, var) for p in same.get(k, []) if p in shown) for k in ("dead", "alternatives")}
     return CheckpointInstance("expr", prompt, hint, var, t.domain, expected=_src(right, var),
                               distractors=tuple(_src(p, var) for p in shown), role=role,
-                              labels={_src(p, var): _label(p, var) for p in [right, *shown]}, **names)
+                              labels={_src(p, var): _label(p, var) for p in [right, *shown]},
+                              notes={_src(p, var): why[p] for p in shown if p in why}, extra_hints=extra_hints, **names)
 
 
 def _reduce_point(t: _Task) -> CheckpointInstance:
@@ -182,7 +220,10 @@ def _reduce_point(t: _Task) -> CheckpointInstance:
     hint = {"power": "y = u^v, ln y = v·ln u; затем один из множителей опусти в знаменатель.",
             "product": "u·v = u/(1/v) = v/(1/u): выбери дробь, которая после дифференцирования упростится.",
             "diff": "Приведи к общему знаменателю."}[t.spec.kind]
-    wrong = [(t.u, 1 / t.v) if power else (t.u, t.v), (den, num)]
+    first = {"power": ((t.u, 1 / t.v), "Потерян логарифм: ln y = v·ln u."),
+             "product": ((t.u, t.v), "Это частное u/v, а не произведение: множитель переносят в знаменатель как 1/(…)."),
+             "diff": ((t.u, t.v), "Это частное, а не разность: приведи к общему знаменателю.")}[t.spec.kind]
+    wrong = [first, ((den, num), "Дробь перевёрнута: она равна 1/(исходное выражение), а не ему.")]
     return _pair_point(t, prompt, hint, "reduce", (num, den), same, wrong)
 
 
@@ -190,8 +231,15 @@ def _lhopital_point(t: _Task, prev: Link, cur: Link) -> CheckpointInstance:
     f, g, x = prev.num, prev.den, t.x
     df, dg = sp.diff(f, x), sp.diff(g, x)
     quotient = sp.fraction(sp.together(sp.diff(f / g, x)))
+    wrong = [(quotient, "Это производная всей дроби (f/g)′. По правилу Лопиталя числитель и знаменатель "
+                        "дифференцируют по отдельности: f′/g′."),
+             ((df, g), "Продифференцирован только числитель — знаменатель тоже нужно."),
+             ((f, dg), "Продифференцирован только знаменатель — числитель тоже нужно.")]
+    var = t.tpl.var
+    hints = (("Производная числителя: f′ =", ru_latex(parse_trusted(_plain(df, var), var), var)),
+             ("Производная знаменателя: g′ =", ru_latex(parse_trusted(_plain(dg, var), var), var)))
     return _pair_point(t, "Примени правило Лопиталя и упрости", LH_HINT, "lhopital", (cur.num, cur.den), {},
-                       [_neat(p) for p in (quotient, (df, g), (f, dg)) if p[1] != 0])
+                       [(_neat(p), note) for p, note in wrong if p[1] != 0], hints)
 
 
 def _traps(t: _Task, value: sp.Expr, links: tuple[Link, ...] | None) -> dict[str, str]:
@@ -258,10 +306,10 @@ def build_limit(tpl: Template, params: dict[str, int]) -> Instance:
     if links and len(links) - 1 <= MAX_DIFFS:
         try:
             if tpl.limit.kind != "ratio":
-                cps += [_type_point(t.start_kind(), True, tpl.var, t.domain), _reduce_point(t)]
-            cps.append(_type_point(links[0].kind, not cps, tpl.var, t.domain))
+                cps += [_type_point(t, t.start_kind(), True, (t.u, t.v), tpl.limit.kind), _reduce_point(t)]
+            cps.append(_type_point(t, links[0].kind, not cps, (links[0].num, links[0].den), "ratio"))
             for prev, cur in zip(links, links[1:]):
-                cps += [_lhopital_point(t, prev, cur), _type_point(cur.kind, False, tpl.var, t.domain)]
+                cps += [_lhopital_point(t, prev, cur), _type_point(t, cur.kind, False, (cur.num, cur.den), "ratio")]
         except GenerationError as exc:
             t.fail(str(exc))
         if any(card_px(label) > MAX_CARD_PX for c in cps for label in (c.labels or {}).values()):

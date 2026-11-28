@@ -11,10 +11,11 @@ from openpyxl.utils import get_column_letter
 from bot.db import DB, TZ
 from bot.flow import MAX_ATTEMPTS, METHOD_IDX
 from bot.stats import COUNTED_STATUSES, NOT_SPENT, TRAIN_MODES, local_date, streak
-from bot.topics import TOPIC_NAMES, method_options, topic_title
+from bot.topics import INTEGRALS, LIMITS, TOPIC_NAMES, method_options, section_of, topic_title
+from core.limits import NO_TYPE, TYPES
 from core.templates import Template
 
-SHEETS = ["Студенты", "Шаблоны", "Блиц", "Вразнобой"]
+SHEETS = ["Студенты", "Шаблоны", "Блиц — интегралы", "Вразнобой", "Блиц — пределы", "Типы неопределённостей"]
 ERRORS = ("wrong", "sign", "factor", "no_const")          # содержательные ошибки (не опечатки)
 TOP_N = 3
 
@@ -28,9 +29,10 @@ class StudentRow:
     finished: int                     # задач доведено до конца (solved + revealed)
     first_try: float | None           # доля шагов с 1-й попытки, 0..1 (как в /me)
     topic_first_try: dict[str, float | None]
-    best_blitz: str | None            # «9/10 · 10 с»
+    best_blitz: str | None            # «9/10 · 10 с» — интегралы
     blitz_runs: int                   # доигранных серий
     last_active: date | None
+    best_blitz_limits: str | None = None
 
 
 @dataclass(frozen=True)
@@ -65,10 +67,13 @@ class ExportData:
     checkpoints: list[CheckpointRow]
     blitz: Matrix
     mix: Matrix
+    blitz_limits: Matrix | None = None
+    types: Matrix | None = None                # тип неопределённости: верный × выбранный
 
 
 CTYPE_RU = {"choice": "выбор", "expr": "выражение", "transformed_integrand": "интеграл после замены",
-            "antiderivative": "ответ", "value": "значение", "method": "метод"}
+            "antiderivative": "ответ", "value": "значение", "type": "тип неопределённости",
+            "reduce": "приведение к дроби", "lhopital": "правило Лопиталя", "method": "метод"}
 NOT_ATTEMPT = (*NOT_SPENT, "revealed")       # не тратят попытку
 
 
@@ -99,13 +104,16 @@ def _students(students, sessions, attempts, runs, topics, today) -> list[Student
             by_topic[topic][0] += verdict == "ok"
         ok_total = sum(v[0] for v in by_topic.values())
         my_runs = [r for r in runs if r[0] == st_id]
-        best = max(my_runs, key=lambda r: (r[1], -r[3], -r[2]), default=None)   # счёт ↑, время ↓
+        top = lambda sec: max((r for r in my_runs if r[4] == sec), key=lambda r: (r[1], -r[3], -r[2]),
+                              default=None)                               # счёт ↑, время ↓
+        best, best_lim = top(INTEGRALS), top(LIMITS)
         rows.append(StudentRow(
             name=name, days_active=len(days), streak=streak(days, today),
             solved=sum(s["status"] == "solved" for s in counted), finished=len(counted),
             first_try=_rate(ok_total, len(first)),
             topic_first_try={t: _rate(*by_topic[t]) if t in by_topic else None for t in topics},
             best_blitz=f"{best[1]}/{best[2]} · {best[3]} с" if best else None, blitz_runs=len(my_runs),
+            best_blitz_limits=f"{best_lim[1]}/{best_lim[2]} · {best_lim[3]} с" if best_lim else None,
             last_active=max(days) if days else None,
         ))
     return rows
@@ -143,7 +151,13 @@ def _checkpoints(attempts, bank) -> list[CheckpointRow]:
     return rows
 
 
-def _matrix(attempts, bank, pick) -> Matrix:
+def _types(attempts) -> Matrix:
+    """Шаги «какой тип неопределённости?»: верный тип (колонка expected) × что выбрал студент."""
+    counts = Counter((a["expected"], a["raw"]) for a in attempts if a["ctype"] == "type" and a["expected"])
+    return Matrix([*TYPES, NO_TYPE], dict(counts))
+
+
+def _matrix(attempts, bank, pick, methods: list[str] | None = None) -> Matrix:
     counts: Counter = Counter()
     for a in attempts:
         if not pick(a):
@@ -153,7 +167,7 @@ def _matrix(attempts, bank, pick) -> Matrix:
             continue
         chosen = a["raw"] if a["verdict"] != "skip" and a["raw"] else None
         counts[(tpl.blitz_method, chosen)] += 1
-    methods = list(method_options(bank))
+    methods = list(methods or method_options(bank, INTEGRALS))
     extra = sorted({m for pair in counts for m in pair if m and m not in methods})
     return Matrix(methods + extra, dict(counts))
 
@@ -164,20 +178,23 @@ async def collect(db: DB, bank: dict[str, Template], today: date | None = None) 
     sessions = [dict(zip(("id", "student", "mode", "status"), r))
                 for r in await _fetch(db, "SELECT id, student_id, mode, status FROM sessions")]
     attempts = [dict(zip(("student", "session", "mode", "status", "template_id", "topic", "difficulty", "idx",
-                          "ctype", "raw", "verdict", "hint", "created_at"), r))
+                          "ctype", "raw", "verdict", "hint", "created_at", "expected"), r))
                 for r in await _fetch(
                     db, "SELECT s.student_id, s.id, s.mode, s.status, i.template_id, i.topic, i.difficulty, "
-                        "a.checkpoint_idx, a.checkpoint_type, a.raw_input, a.verdict, a.hint_used, a.created_at "
+                        "a.checkpoint_idx, a.checkpoint_type, a.raw_input, a.verdict, a.hint_used, a.created_at, a.expected "
                         "FROM attempts a JOIN sessions s ON s.id = a.session_id "
                         "JOIN instances i ON i.id = s.instance_id ORDER BY a.id")]
-    runs = await _fetch(db, "SELECT student_id, score, total, COALESCE(time_limit, 10) FROM blitz_runs "
-                            "WHERE finished_at IS NOT NULL")
+    runs = await _fetch(db, "SELECT student_id, score, total, COALESCE(time_limit, 10), "
+                            "COALESCE(section, 'indef_integral') FROM blitz_runs WHERE finished_at IS NOT NULL")
     topics = list(TOPIC_NAMES)
     return ExportData(
         topics=topics,
         students=_students(students, sessions, attempts, runs, topics, today),
         checkpoints=_checkpoints(attempts, bank),
-        blitz=_matrix(attempts, bank, lambda a: a["mode"] == "blitz"),
+        blitz=_matrix(attempts, bank, lambda a: a["mode"] == "blitz" and section_of(a["topic"] or "") == INTEGRALS),
+        blitz_limits=_matrix(attempts, bank, lambda a: a["mode"] == "blitz" and section_of(a["topic"] or "") == LIMITS,
+                             methods=[*TYPES]),
+        types=_types(attempts),
         mix=_matrix(attempts, bank, lambda a: a["idx"] == METHOD_IDX and a["verdict"] in ("ok", "wrong")),
     )
 
@@ -206,9 +223,9 @@ def _sheet(wb: Workbook, title: str, header: list[str], rows: list[list], format
     return ws
 
 
-def _matrix_sheet(wb: Workbook, title: str, m: Matrix, with_skip: bool):
+def _matrix_sheet(wb: Workbook, title: str, m: Matrix, with_skip: bool, corner: str = "Верный метод \\ выбранный"):
     cols = m.methods + ([None] if with_skip else [])
-    header = ["Верный метод \\ выбранный", *m.methods, *(["не успел"] if with_skip else []), "Всего", "% верных"]
+    header = [corner, *m.methods, *(["не успел"] if with_skip else []), "Всего", "% верных"]
     rows = []
     for meth in m.methods:
         cells = [m.counts.get((meth, c)) for c in cols]
@@ -222,9 +239,9 @@ def build_xlsx(data: ExportData) -> bytes:
     wb.remove(wb.active)
     topic_cols = [topic_title(t) for t in data.topics]
     header = ["ФИО", "Дней активности", "Серия (дней)", "Задач решено", "Задач доведено", "% с 1-й попытки",
-              *topic_cols, "Лучший блиц", "Блицев сыграно", "Последняя активность"]
+              *topic_cols, "Лучший блиц", "Лучший блиц: пределы", "Блицев сыграно", "Последняя активность"]
     rows = [[s.name, s.days_active, s.streak, s.solved, s.finished, s.first_try,
-             *[s.topic_first_try.get(t) for t in data.topics], s.best_blitz, s.blitz_runs, s.last_active]
+             *[s.topic_first_try.get(t) for t in data.topics], s.best_blitz, s.best_blitz_limits, s.blitz_runs, s.last_active]
             for s in data.students]
     pct_cols = {6: PCT, **{7 + k: PCT for k in range(len(topic_cols))}, len(header): DATE}
     _sheet(wb, SHEETS[0], header, rows, pct_cols)
@@ -238,6 +255,10 @@ def build_xlsx(data: ExportData) -> bytes:
 
     _matrix_sheet(wb, SHEETS[2], data.blitz, with_skip=True)
     _matrix_sheet(wb, SHEETS[3], data.mix, with_skip=False)
+    if data.blitz_limits is not None:
+        _matrix_sheet(wb, SHEETS[4], data.blitz_limits, with_skip=True)
+    if data.types is not None:
+        _matrix_sheet(wb, SHEETS[5], data.types, with_skip=False, corner="Верный тип \\ выбранный")
     buf = BytesIO()
     wb.save(buf)
     return buf.getvalue()

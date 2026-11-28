@@ -25,7 +25,6 @@ CheckFn = Callable[[str, str, str, str, tuple[float, float]], Verdict]
 
 
 HIDE_TEXT = "Убрал часть неверных вариантов."
-NOTE_DEAD = "Верно, но после правила Лопиталя станет сложнее: неопределённость не исчезнет."
 NOTE_METHOD_ALT = "Сработает, но можно короче"
 METHOD_IDX = -1                    # номер шага «метод» в логе: номера шагов шаблона не сдвигаются
 
@@ -201,8 +200,8 @@ class TrainSession:
         self._level, self._hidden = 0, ()
 
     def _where(self) -> tuple[int, str]:
-        """(номер для лога, тип) текущего шага."""
-        return (METHOD_IDX, "method") if self._in_method else (self._idx, self._cp.type)
+        """(номер для лога, тип) текущего шага; у предела — роль шага (type, reduce, lhopital, value)."""
+        return (METHOD_IDX, "method") if self._in_method else (self._idx, self._cp.role or self._cp.type)
 
     def _register(self, verdict: Verdict, raw: str, method: str) -> Outcome:
         idx, ctype = self._where()
@@ -211,6 +210,8 @@ class TrainSession:
         log = {"checkpoint_idx": idx, "checkpoint_type": ctype, "raw_input": raw,
                "verdict": verdict.status, "input_method": method,
                "hint_used": self._level, "attempt_no": attempt_no}
+        if not self._in_method and self._cp.role == "type":
+            log["expected"] = self._cp.correct[0]          # для листа «Типы неопределённостей»
         if verdict.status == OK:
             self._attempts += 1
             self._advance("first_try" if self._attempts == 1 else "later")
@@ -250,7 +251,7 @@ class TrainSession:
         if not 0 <= i < len(labels):
             raise ValueError(f"нет кнопки {i}")
         cp = self._cp
-        note = NOTE_METHOD_ALT if srcs[i] in cp.alternatives else NOTE_DEAD if srcs[i] in cp.dead else None
+        note = NOTE_METHOD_ALT if srcs[i] in cp.alternatives else None if i in correct else (cp.notes or {}).get(srcs[i])
         return self._register(Verdict(OK if i in correct else WRONG, note), srcs[i], "button")
 
     def preview(self, raw: str) -> Preview:
@@ -313,10 +314,12 @@ class TrainSession:
             if self.needs_answer_hints:
                 self.set_answer_hints(self._direct, answer_hints(self.inst, self._direct))
             return self._answer_hints[1]
-        texts = [t for t in [self._method.hint if self._in_method else self._cp.hint] if t]
+        steps = [(t, None) for t in [self._method.hint if self._in_method else self._cp.hint] if t]
+        if not self._in_method:
+            steps += list(self._cp.extra_hints)        # предел: факты этой задачи, f′ и g′
         if self.current().kind == "buttons" and self._to_hide():
-            texts.append(HIDE_TEXT)
-        return tuple(Hint(i, t, last=i == len(texts)) for i, t in enumerate(texts, 1))
+            steps.append((HIDE_TEXT, None))
+        return tuple(Hint(i, t, lx, last=i == len(steps)) for i, (t, lx) in enumerate(steps, 1))
 
     def _to_hide(self) -> tuple[int, ...]:
         """Какие неверные варианты убрать: остаётся треть (не меньше одного). Рабочие альтернативы не трогаем."""

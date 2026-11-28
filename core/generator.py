@@ -35,6 +35,8 @@ class CheckpointInstance:
     role: str | None = None            # предел: type | reduce | lhopital | value
     alternatives: tuple[str, ...] = () # reduce: верно, но длиннее
     labels: dict[str, str] | None = None  # вариант → LaTeX, если показывать надо дробью, а не как её сворачивает sympy
+    notes: dict[str, str] | None = None   # предел: неверный вариант → пояснение, почему он неверен
+    extra_hints: tuple = ()            # предел: следующие уровни подсказки после hint, каждый — (текст, LaTeX)
     dead: tuple[str, ...] = ()         # reduce: верно, но неопределённость не исчезнет
     traps: dict[str, str] | None = None   # value: типичное неверное значение → диагноз
 

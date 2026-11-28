@@ -12,7 +12,8 @@ from bot import commands
 from bot.bank import reload_bank
 from bot.config import load_settings
 from bot.db import DB
-from bot.genpool import BlitzStock, GenPool
+from bot.genpool import BlitzStock, BlitzStocks, GenPool
+from bot.topics import INTEGRALS, LIMITS
 from bot.ocr import YandexOcr
 from bot.handlers import admin, blitz, me, start, train
 from core.checker import check_with_timeout, shutdown_pool
@@ -20,7 +21,7 @@ from core.templates import load_templates
 
 
 
-async def reload_on_signal(bot: Bot, bank: dict, settings, stock: BlitzStock) -> None:
+async def reload_on_signal(bot: Bot, bank: dict, settings, stock: BlitzStocks) -> None:
     """SIGHUP (deploy.sh --templates): перечитать шаблоны без рестарта и сообщить админу."""
     ok, msg = await asyncio.to_thread(reload_bank, bank, settings.templates_dir)
     if ok:
@@ -48,7 +49,7 @@ async def main() -> None:
         if settings.yandex_api_key and settings.yandex_folder_id else None
     logging.info("фото-ввод: %s", "включён" if ocr else "выключен (нет YANDEX_API_KEY / YANDEX_FOLDER_ID)")
     gen = GenPool()                                  # sympy-генерация — в отдельном процессе
-    stock = BlitzStock(gen, bank)
+    stock = BlitzStocks({INTEGRALS: BlitzStock(gen, bank), LIMITS: BlitzStock(gen, bank, section=LIMITS)})
     dp = Dispatcher(storage=MemoryStorage(), db=db, bank=bank, settings=settings, ocr=ocr, gen=gen, stock=stock)
     dp.include_routers(admin.make_router(settings.admin_tg_id), start.router, blitz.router, me.router,
                        train.router)   # train последним: в нём перехват любого текста
@@ -61,11 +62,12 @@ async def main() -> None:
             signal.SIGHUP, lambda: asyncio.create_task(reload_on_signal(bot, bank, settings, stock)))
     except (NotImplementedError, AttributeError):    # Windows: сигналов нет — только /reload
         pass
-    refill = asyncio.create_task(stock.keep_full())
+    refills = [asyncio.create_task(s.keep_full()) for s in stock.values()]
     try:
         await dp.start_polling(bot)
     finally:
-        refill.cancel()
+        for r in refills:
+            r.cancel()
         await asyncio.to_thread(gen.close)
         await db.close()
         await asyncio.to_thread(shutdown_pool)

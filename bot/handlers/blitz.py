@@ -11,7 +11,8 @@ from aiogram.types import BufferedInputFile, CallbackQuery, InlineKeyboardButton
 
 from bot.blitz import OK, SKIP, TIME_LIMIT, BlitzAnswer, BlitzRun, InvalidTime, countdown_marks, parse_time
 from bot.db import DB
-from bot.genpool import GEN_FAILED, BlitzStock, GenError
+from bot.genpool import GEN_FAILED, BlitzStock, BlitzStocks, GenError
+from bot.topics import INTEGRALS, LIMITS, SECTION_NAMES, section_of, sections
 from bot.render import render_or_text
 from core.templates import Template
 
@@ -29,7 +30,8 @@ class BlitzState:
     sent_at: float = 0.0
     task_msg: Message | None = None
     timer: asyncio.Task | None = field(default=None, repr=False)
-    countdown: list = field(default_factory=list)   # «3…», «2…», «1…» текущей задачи — удалим по её окончании
+    countdown: list = field(default_factory=list)
+    section: str = INTEGRALS   # «3…», «2…», «1…» текущей задачи — удалим по её окончании
 
 
 BLITZ: dict[int, BlitzState] = {}      # chat_id → серия
@@ -43,7 +45,7 @@ def cancel_blitz(chat_id: int) -> bool:
     if st:
         asyncio.create_task(clear_countdown(st))
     was_waiting = chat_id in WAIT_TIME          # передумал вводить время — /stop или /train снимают ожидание
-    WAIT_TIME.discard(chat_id)
+    WAIT_TIME.pop(chat_id, None)
     return st is not None or was_waiting
 
 
@@ -143,42 +145,63 @@ async def finish(chat_id: int, db: DB):
             lines.append(line)
     else:
         lines.append("Без ошибок! 🔥")
-    t = int(st.run.time_limit)
+    t, sec = int(st.run.time_limit), st.section
     kb = InlineKeyboardMarkup(inline_keyboard=[[
-        InlineKeyboardButton(text=f"Ещё блиц · {t} с", callback_data=f"bt:{t}"),
-        InlineKeyboardButton(text="Другое время", callback_data="blitz")]])
+        InlineKeyboardButton(text=f"Ещё блиц · {t} с", callback_data=f"bt:{t}:{sec}"),
+        InlineKeyboardButton(text="Другое время", callback_data=f"bs:{sec}")]])
     await st.message.answer("\n".join(lines), reply_markup=kb)
 
 
-WAIT_TIME: set[int] = set()            # чаты, где ждём число секунд сообщением
+WAIT_TIME: dict[int, str] = {}         # чат → раздел, где ждём число секунд сообщением
+TASK_WORD = {INTEGRALS: "выбери метод", LIMITS: "назови тип неопределённости"}
 
 
-async def ask_time(message: Message, tg_id: int, db: DB):
+def blitz_sections(bank: dict[str, Template]) -> list[str]:
+    """Разделы, в которых есть шаблоны для блица."""
+    return [s for s in sections(bank) if any(t.blitz_method and section_of(t.topic) == s for t in bank.values())]
+
+
+async def ask_section(message: Message, tg_id: int, db: DB, bank: dict[str, Template]):
+    """/blitz: раздел (если их больше одного), затем время."""
+    if not await db.get_student_by_tg(tg_id):
+        await message.answer("Сначала зарегистрируйся: /start")
+        return
+    secs = blitz_sections(bank)
+    if len(secs) == 1:
+        await ask_time(message, tg_id, db, secs[0])
+        return
+    kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text=SECTION_NAMES[s], callback_data=f"bs:{s}")]
+                                               for s in secs])
+    await message.answer("⚡ Блиц: по какому разделу?", reply_markup=kb)
+
+
+async def ask_time(message: Message, tg_id: int, db: DB, section: str = INTEGRALS):
     """Шаг перед блицем: стандартные 10 с или своё время."""
     if not await db.get_student_by_tg(tg_id):
         await message.answer("Сначала зарегистрируйся: /start")
         return
-    WAIT_TIME.discard(message.chat.id)
+    WAIT_TIME.pop(message.chat.id, None)
     kb = InlineKeyboardMarkup(inline_keyboard=[[
-        InlineKeyboardButton(text=f"⏱ {int(TIME_LIMIT)} с", callback_data=f"bt:{int(TIME_LIMIT)}"),
-        InlineKeyboardButton(text="Указать вручную", callback_data="bt:custom")]])
-    await message.answer("⚡ Блиц: 10 задач на выбор метода. Сколько времени на карточку?", reply_markup=kb)
+        InlineKeyboardButton(text=f"⏱ {int(TIME_LIMIT)} с", callback_data=f"bt:{int(TIME_LIMIT)}:{section}"),
+        InlineKeyboardButton(text="Указать вручную", callback_data=f"bt:custom:{section}")]])
+    await message.answer(f"⚡ Блиц: 10 задач — {TASK_WORD.get(section, 'выбери метод')}. "
+                         "Сколько времени на карточку?", reply_markup=kb)
 
 
 async def start_blitz(message: Message, tg_id: int, db: DB, bank: dict[str, Template], time_limit: int,
-                      stock: BlitzStock):
+                      stock: BlitzStock, section: str = INTEGRALS):
     student = await db.get_student_by_tg(tg_id)
     if not student:
         await message.answer("Сначала зарегистрируйся: /start")
         return
-    WAIT_TIME.discard(message.chat.id)
-    await message.answer(f"⚡ Блиц: 10 задач, {time_limit} секунд на каждую. Выбери метод решения.\n"
+    WAIT_TIME.pop(message.chat.id, None)
+    await message.answer(f"⚡ Блиц: 10 задач, {time_limit} секунд на каждую — {TASK_WORD.get(section, 'выбери метод')}.\n"
                          "Готовлю задачи…")
     try:
         tasks = await stock.take()
     except GenError:                                  # прошлую задачу не закрываем: серии нет
         await message.answer(GEN_FAILED, reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
-            InlineKeyboardButton(text="Ещё раз", callback_data="blitz")]]))
+            InlineKeyboardButton(text="Ещё раз", callback_data=f"bt:{time_limit}:{section}")]]))
         return
     from bot.handlers.train import close_current      # ленивый импорт: train ↔ blitz
     await close_current(message.chat.id, db)
@@ -186,8 +209,8 @@ async def start_blitz(message: Message, tg_id: int, db: DB, bank: dict[str, Temp
     run = BlitzRun.from_tasks(tasks, time_limit=time_limit)
     images = await asyncio.to_thread(
         lambda: [render_or_text(t.instance.statement_latex, t.instance.statement_latex) for t in run.tasks])
-    run_id = await db.start_blitz_run(student.id, time_limit=time_limit)
-    BLITZ[message.chat.id] = BlitzState(run, run_id, student.id, images, dict(bank), message)
+    run_id = await db.start_blitz_run(student.id, time_limit=time_limit, section=section)
+    BLITZ[message.chat.id] = BlitzState(run, run_id, student.id, images, dict(bank), message, section=section)
     for n in ("3", "2", "1"):
         await message.answer(n)
         await asyncio.sleep(1)
@@ -197,36 +220,50 @@ async def start_blitz(message: Message, tg_id: int, db: DB, bank: dict[str, Temp
 
 
 @router.message(Command("blitz"))
-async def cmd_blitz(message: Message, db: DB):
-    await ask_time(message, message.from_user.id, db)
+async def cmd_blitz(message: Message, db: DB, bank: dict[str, Template]):
+    await ask_section(message, message.from_user.id, db, bank)
 
 
-@router.callback_query(F.data == "blitz")
-async def cb_blitz(cb: CallbackQuery, db: DB):
+@router.callback_query(F.data == "blitz")              # старая кнопка в чатах: спросим раздел
+async def cb_blitz(cb: CallbackQuery, db: DB, bank: dict[str, Template]):
     await cb.answer()
-    await ask_time(cb.message, cb.from_user.id, db)
+    await ask_section(cb.message, cb.from_user.id, db, bank)
+
+
+@router.callback_query(F.data.startswith("bs:"))
+async def cb_section(cb: CallbackQuery, db: DB, bank: dict[str, Template]):
+    section = cb.data[3:]
+    if section not in blitz_sections(bank):
+        await cb.answer("В этом разделе блица пока нет", show_alert=True)
+        return
+    await cb.answer()
+    await ask_time(cb.message, cb.from_user.id, db, section)
 
 
 @router.callback_query(F.data.startswith("bt:"))
-async def cb_time(cb: CallbackQuery, db: DB, bank: dict[str, Template], stock: BlitzStock):
+async def cb_time(cb: CallbackQuery, db: DB, bank: dict[str, Template], stock: BlitzStocks):
     await cb.answer()
     await cb.message.edit_reply_markup(reply_markup=None)
-    choice = cb.data[3:]
+    choice, _, section = cb.data[3:].partition(":")
+    section = section or INTEGRALS                     # старые кнопки «bt:10» — интегралы
     if choice == "custom":
-        WAIT_TIME.add(cb.message.chat.id)
+        WAIT_TIME[cb.message.chat.id] = section
         await cb.message.answer("Напиши, сколько секунд на карточку: от 5 до 60, кратное 5 (например, 25).")
         return
-    await start_blitz(cb.message, cb.from_user.id, db, bank, time_limit=int(choice), stock=stock)
+    await start_blitz(cb.message, cb.from_user.id, db, bank, time_limit=int(choice), stock=stock[section],
+                      section=section)
 
 
 @router.message(F.text & ~F.text.startswith("/"), F.chat.id.func(lambda cid: cid in WAIT_TIME))
-async def on_time_text(message: Message, db: DB, bank: dict[str, Template], stock: BlitzStock):
+async def on_time_text(message: Message, db: DB, bank: dict[str, Template], stock: BlitzStocks):
     try:
         seconds = parse_time(message.text)
     except InvalidTime as e:
         await message.answer(escape(str(e)))
         return
-    await start_blitz(message, message.from_user.id, db, bank, time_limit=seconds, stock=stock)
+    section = WAIT_TIME.get(message.chat.id, INTEGRALS)
+    await start_blitz(message, message.from_user.id, db, bank, time_limit=seconds, stock=stock[section],
+                      section=section)
 
 
 @router.callback_query(F.data.startswith("z:"))

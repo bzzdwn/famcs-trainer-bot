@@ -14,6 +14,7 @@ from concurrent.futures import TimeoutError as FutureTimeout
 from pebble import ProcessExpired, ProcessPool
 
 from bot.blitz import BlitzRun, BlitzTask
+from bot.topics import INTEGRALS
 from core.generator import Instance, generate
 from core.hints import Hint, answer_hints
 from core.templates import Template
@@ -31,8 +32,8 @@ def _init() -> None:
     os.nice(NICE)
 
 
-def _blitz(bank: dict[str, Template], seed: int) -> tuple[BlitzTask, ...]:
-    return BlitzRun(bank, seed=seed).tasks
+def _blitz(bank: dict[str, Template], seed: int, section: str = INTEGRALS) -> tuple[BlitzTask, ...]:
+    return BlitzRun(bank, seed=seed, section=section).tasks
 
 
 class GenPool:
@@ -69,8 +70,8 @@ class GenPool:
     async def hints(self, inst: Instance, direct: bool) -> tuple[Hint, ...]:
         return await self.run(answer_hints, inst, direct)
 
-    async def blitz_tasks(self, bank: dict[str, Template], seed: int) -> tuple[BlitzTask, ...]:
-        return await self.run(_blitz, dict(bank), seed)
+    async def blitz_tasks(self, bank: dict[str, Template], seed: int, section: str = INTEGRALS) -> tuple[BlitzTask, ...]:
+        return await self.run(_blitz, dict(bank), seed, section)
 
     @property
     def busy(self) -> bool:
@@ -84,9 +85,17 @@ class GenPool:
             self._pool = None
 
 
+class BlitzStocks(dict):
+    """Запасы серий по разделам: {раздел: BlitzStock}. reset — у всех (шаблоны перечитаны)."""
+
+    def reset(self) -> None:
+        for s in self.values():
+            s.reset()
+
+
 class BlitzStock:
-    def __init__(self, pool, bank: dict[str, Template], size: int = STOCK_SIZE):
-        self._pool, self._bank, self._size = pool, bank, size
+    def __init__(self, pool, bank: dict[str, Template], size: int = STOCK_SIZE, section: str = INTEGRALS):
+        self._pool, self._bank, self._size, self._section = pool, bank, size, section
         self._ready: deque[tuple[BlitzTask, ...]] = deque()
         self._version = 0                 # растёт при reset: серия, начатая до него, в запас не попадёт
 
@@ -94,7 +103,9 @@ class BlitzStock:
         return len(self._ready)
 
     async def _make(self) -> tuple[BlitzTask, ...]:
-        return await self._pool.blitz_tasks(self._bank, secrets.randbits(32))
+        if self._section == INTEGRALS:            # FakePool в тестах знает только (bank, seed)
+            return await self._pool.blitz_tasks(self._bank, secrets.randbits(32))
+        return await self._pool.blitz_tasks(self._bank, secrets.randbits(32), self._section)
 
     async def take(self) -> tuple[BlitzTask, ...]:
         """Готовая серия из запаса; пусто — приготовить сейчас."""

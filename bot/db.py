@@ -18,12 +18,13 @@ CREATE TABLE IF NOT EXISTS sessions  (id INTEGER PRIMARY KEY, student_id INT, in
 CREATE TABLE IF NOT EXISTS attempts  (id INTEGER PRIMARY KEY, session_id INT, checkpoint_idx INT,
                                       checkpoint_type TEXT, raw_input TEXT, verdict TEXT,
                                       input_method TEXT, ocr_raw TEXT, ocr_edited INT,
-                                      hint_used INT, attempt_no INT, latency_ms INT, created_at TEXT);
+                                      hint_used INT, attempt_no INT, latency_ms INT, created_at TEXT,
+                                      expected TEXT);
 CREATE TABLE IF NOT EXISTS ocr_requests (id INTEGER PRIMARY KEY, student_id INT, file_id TEXT,
                                          recognized TEXT, status TEXT, created_at TEXT,
                                          markdown TEXT, attempt_id INT);
 CREATE TABLE IF NOT EXISTS blitz_runs (id INTEGER PRIMARY KEY, student_id INT, started_at TEXT, finished_at TEXT,
-                                       score INT, total INT, time_limit INT);
+                                       score INT, total INT, time_limit INT, section TEXT);
 """
 
 
@@ -76,7 +77,9 @@ class DB:
 
     # колонки, добавленные после первых запусков: CREATE TABLE IF NOT EXISTS их в старую базу не добавит
     MIGRATIONS = {"ocr_requests": {"markdown": "TEXT", "attempt_id": "INT"},
-                  "blitz_runs": {"time_limit": "INT"}}          # старые серии: NULL = 10 с
+                  "blitz_runs": {"time_limit": "INT",          # старые серии: NULL = 10 с
+                                 "section": "TEXT"},           # NULL = интегралы (до разделов)
+                  "attempts": {"expected": "TEXT"}}            # верный вариант шага (пока — тип неопределённости)
 
     @classmethod
     async def _migrate(cls, conn: aiosqlite.Connection) -> None:
@@ -153,19 +156,19 @@ class DB:
     async def log_attempt(self, session_id: int, *, checkpoint_idx: int, checkpoint_type: str,
                           raw_input: str, verdict: str, input_method: str, hint_used: bool,
                           attempt_no: int, latency_ms: int,
-                          ocr_raw: str | None = None, ocr_edited: bool = False) -> int:
+                          ocr_raw: str | None = None, ocr_edited: bool = False, expected: str | None = None) -> int:
         cur = await self._exec(
             "INSERT INTO attempts (session_id, checkpoint_idx, checkpoint_type, raw_input, verdict, input_method, "
-            "ocr_raw, ocr_edited, hint_used, attempt_no, latency_ms, created_at) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "ocr_raw, ocr_edited, hint_used, attempt_no, latency_ms, created_at, expected) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             session_id, checkpoint_idx, checkpoint_type, raw_input, verdict, input_method,
-            ocr_raw, int(ocr_edited), int(hint_used), attempt_no, latency_ms, _now())
+            ocr_raw, int(ocr_edited), int(hint_used), attempt_no, latency_ms, _now(), expected)
         return cur.lastrowid
 
     # --- блиц
-    async def start_blitz_run(self, student_id: int, time_limit: int = 10) -> int:
-        cur = await self._exec("INSERT INTO blitz_runs (student_id, started_at, time_limit) VALUES (?, ?, ?)",
-                               student_id, _now(), time_limit)
+    async def start_blitz_run(self, student_id: int, time_limit: int = 10, section: str = "indef_integral") -> int:
+        cur = await self._exec("INSERT INTO blitz_runs (student_id, started_at, time_limit, section) VALUES (?, ?, ?, ?)",
+                               student_id, _now(), time_limit, section)
         return cur.lastrowid
 
     async def finish_blitz_run(self, run_id: int, score: int, total: int) -> None:

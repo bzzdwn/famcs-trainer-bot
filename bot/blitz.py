@@ -4,7 +4,8 @@ import re
 from dataclasses import dataclass
 
 from core.generator import Instance, generate
-from bot.topics import INTEGRALS, section_of
+from bot.topics import INTEGRALS, LIMITS, section_of
+from core.limits import TYPE_HINTS, TYPES
 from core.templates import Template
 
 BLITZ_SIZE = 10
@@ -75,7 +76,8 @@ class BlitzRun:
         Различных методов < N_OPTIONS → ValueError."""
         eligible = sorted((t for t in bank.values() if t.blitz_method and section_of(t.topic) == section),
                           key=lambda t: t.id)
-        methods = sorted({t.blitz_method for t in eligible})
+        # пределы: «назови тип» — неверные кнопки из всех типов, а не только встретившихся в банке
+        methods = list(TYPES) if section == LIMITS else sorted({t.blitz_method for t in eligible})
         if len(methods) < N_OPTIONS:
             raise ValueError(f"для блица нужно ≥ {N_OPTIONS} различных методов, есть {len(methods)}")
         rng = random.Random(seed)
@@ -90,7 +92,8 @@ class BlitzRun:
             valid = {tpl.blitz_method, *tpl.method_alternatives}     # рабочие методы не годятся в неверные кнопки
             opts = rng.sample([m for m in methods if m not in valid], N_OPTIONS - 1) + [tpl.blitz_method]
             rng.shuffle(opts)
-            tasks.append(BlitzTask(tpl.id, inst, tpl.blitz_method, tuple(opts), tpl.checkpoints[0].hint))
+            hint = tpl.checkpoints[0].hint if tpl.checkpoints else TYPE_HINTS.get(tpl.blitz_method)
+            tasks.append(BlitzTask(tpl.id, inst, tpl.blitz_method, tuple(opts), hint))
         self._setup(tuple(tasks), time_limit)
 
     def _setup(self, tasks: tuple[BlitzTask, ...], time_limit: float) -> None:
